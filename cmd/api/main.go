@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"web-based-dev-platform-backend/internal/auth"
 	"web-based-dev-platform-backend/internal/config"
 	"web-based-dev-platform-backend/internal/database"
 
@@ -23,7 +24,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	r.Route("/api", func(api chi.Router) {
-		RegisterAuth(api, db, cfg)
+		auth.RegisterAuth(api, db, cfg)
 		RegisterProjects(api, db)
 		RegisterWorkspaces(api, db, cfg)
 		RegisterWebSockets(api, db, cfg)
