@@ -3,14 +3,17 @@ package config
 import (
 	"log"
 	"os"
+
+	"github.com/moby/moby/client"
 )
 
 // Interface for the Config Struct
 type Config struct {
-	Env        string
-	DBUrl      string
-	JWTSecret  string
-	DockerHost string
+	Env          string
+	DBUrl        string
+	JWTSecret    string
+	DockerHost   string
+	DockerClient *client.Client
 }
 
 // Load the configuration from the environment variable

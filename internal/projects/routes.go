@@ -20,7 +20,7 @@ func RegisterProjects(r chi.Router, db *pgxpool.Pool) {
 	r.Get("/projects/all", listProjects(db))
 }
 
-//Create a new project
+// Create a new project
 func createProject(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userId := r.Context().Value("userId").(string)
@@ -45,7 +45,7 @@ func createProject(db *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-//List all the projects assigned to the logged user
+// List all the projects assigned to the logged user
 func listProjects(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userId := r.Context().Value("userId").(string)
