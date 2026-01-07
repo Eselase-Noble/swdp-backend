@@ -1,26 +1,38 @@
 package execution
 
-import "context"
+import (
+	"context"
+
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
+)
 
 func StartContainer(cli *client.Client, name, image, volume string) error {
+
+	ctx := context.Background()
+
 	cfg := &container.Config{
-		image:      image,
+		Image:      image,
 		WorkingDir: "/workspace",
 		Cmd:        []string{"npm", "run", "dev"},
+		Tty:        false,
 	}
 
 	host := &container.HostConfig{
 		Binds: []string{volume + ":/workspace"},
-		Resouces: container.Resources{
+		Resources: container.Resources{
 			Memory:   1024 * 1024 * 1024,
 			NanoCPUs: 1_000_000_000,
 		},
 	}
 
-	_, err := cli.ContainerCreate(context.Background(), cfg, host, nil, nil, name)
+	//networking := &network.NetworkingConfig{}
+	//platform := &v1.Platform{}
+
+	_, err := cli.ContainerCreate(ctx, cfg, host, nil, nil, name)
 	if err != nil {
 		return err
 	}
 
-	return cli.ContainerStart(context.Background(), name, container.StartOptions{})
+	return cli.ContainerStart(ctx, name, container.StartOptions{})
 }
