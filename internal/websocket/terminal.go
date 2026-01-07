@@ -8,8 +8,9 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
-	"github.com/moby/moby/api/types"
-	"github.com/moby/moby/client"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 )
 
 func TerminalHandler(docker *client.Client) http.HandlerFunc {
@@ -18,9 +19,7 @@ func TerminalHandler(docker *client.Client) http.HandlerFunc {
 		workspaceID := chi.URLParam(r, "workspaceID")
 		containerName := "ws-" + workspaceID
 
-		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			InsecureSkipVerify: true,
-		})
+		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			return
 		}
@@ -28,55 +27,84 @@ func TerminalHandler(docker *client.Client) http.HandlerFunc {
 
 		ctx := context.Background()
 
-		execResp, err := docker.ContainerExecCreate(
-			ctx,
-			containerName,
-			types.ExecConfig{
-				Cmd:          []string{"/bin/sh"},
-				AttachStdin:  true,
-				AttachStdout: true,
-				AttachStderr: true,
-				Tty:          true,
-			},
-		)
+		// Create exec instance
+		execConfig := types.ExecConfig{
+			Cmd:          []string{"/bin/sh"},
+			AttachStdin:  true,
+			AttachStdout: true,
+			AttachStderr: true,
+			Tty:          true,
+		}
+
+		execResp, err := docker.ContainerExecCreate(ctx, containerName, execConfig)
 		if err != nil {
-			log.Println("exec create:", err)
+			log.Println("exec create error:", err)
 			return
 		}
 
-		hijack, err := docker.ContainerExecAttach(
-			ctx,
-			execResp.ID,
-			types.ExecStartCheck{Tty: true},
-		)
+		// Attach to exec instance
+		attachResp, err := docker.ContainerExecAttach(ctx, execResp.ID, types.ExecStartCheck{
+			Detach: false,
+			Tty:    true,
+		})
 		if err != nil {
-			log.Println("exec attach:", err)
+			log.Println("exec attach error:", err)
 			return
 		}
-		defer hijack.Close()
+		defer attachResp.Close()
 
-		// WS → Container stdin
+		// Create a cancellable context for goroutine synchronization
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+
+		// WS → container stdin
 		go func() {
+			defer cancel()
 			for {
-				_, msg, err := conn.Read(ctx)
-				if err != nil {
+				select {
+				case <-ctx.Done():
 					return
+				default:
+					_, msg, err := conn.Read(ctx)
+					if err != nil {
+						// Send EOF (Ctrl+D) to terminal when WebSocket closes
+						attachResp.Conn.Write([]byte{4})
+						return
+					}
+					_, err = attachResp.Conn.Write(msg)
+					if err != nil {
+						log.Println("write to container error:", err)
+						return
+					}
 				}
-				_, _ = hijack.Conn.Write(msg)
 			}
 		}()
 
-		// Container stdout → WS
-		buf := make([]byte, 1024)
-		for {
-			n, err := hijack.Reader.Read(buf)
-			if err != nil {
-				if err != io.EOF {
-					log.Println("container read:", err)
+		// container stdout/stderr → WS
+		go func() {
+			defer cancel()
+			buf := make([]byte, 4096)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					n, err := attachResp.Reader.Read(buf)
+					if err != nil {
+						if err != io.EOF {
+							log.Println("container read error:", err)
+						}
+						return
+					}
+					err = conn.Write(ctx, websocket.MessageText, buf[:n])
+					if err != nil {
+						return
+					}
 				}
-				return
 			}
-			_ = conn.Write(ctx, websocket.MessageText, buf[:n])
-		}
+		}()
+
+		// Wait for context cancellation (when any goroutine finishes)
+		<-ctx.Done()
 	}
 }
