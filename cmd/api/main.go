@@ -6,6 +6,9 @@ import (
 	"web-based-dev-platform-backend/internal/auth"
 	"web-based-dev-platform-backend/internal/config"
 	"web-based-dev-platform-backend/internal/database"
+	"web-based-dev-platform-backend/internal/projects"
+	"web-based-dev-platform-backend/internal/websocket"
+	"web-based-dev-platform-backend/internal/workspaces"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -25,9 +28,9 @@ func main() {
 
 	r.Route("/api", func(api chi.Router) {
 		auth.RegisterAuth(api, db, cfg)
-		RegisterProjects(api, db)
-		RegisterWorkspaces(api, db, cfg)
-		RegisterWebSockets(api, db, cfg)
+		projects.RegisterProjects(api, db)
+		workspaces.RegisterWorkspaces(api, db, cfg)
+		websocket.RegisterWebSockets(api, db, cfg)
 	})
 
 	log.Println("SWDP baceknd server running on :8282 ")

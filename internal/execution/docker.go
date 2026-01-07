@@ -36,3 +36,7 @@ func StartContainer(cli *client.Client, name, image, volume string) error {
 
 	return cli.ContainerStart(ctx, name, container.StartOptions{})
 }
+
+func StopContainer(cli *client.Client, volume string) {
+
+}
