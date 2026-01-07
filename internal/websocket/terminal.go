@@ -7,27 +7,26 @@ import (
 	"net/http"
 
 	"github.com/coder/websocket"
-	"github.com/go-chi/chi/v5"
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/go-chi/chi/v5"
 )
 
-func TerminalHandler(docker *client.Client) http.HandlerFunc {
+func TerminalHandler(dockerClient *client.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
 		workspaceID := chi.URLParam(r, "workspaceID")
 		containerName := "ws-" + workspaceID
 
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
+			log.Println("websocket accept error:", err)
 			return
 		}
 		defer conn.Close(websocket.StatusNormalClosure, "")
 
 		ctx := context.Background()
 
-		// Create exec instance
+		// Create exec configuration
 		execConfig := types.ExecConfig{
 			Cmd:          []string{"/bin/sh"},
 			AttachStdin:  true,
@@ -36,19 +35,22 @@ func TerminalHandler(docker *client.Client) http.HandlerFunc {
 			Tty:          true,
 		}
 
-		execResp, err := docker.ContainerExecCreate(ctx, containerName, execConfig)
+		// Create exec instance in the container
+		execResp, err := dockerClient.ContainerExecCreate(ctx, containerName, execConfig)
 		if err != nil {
 			log.Println("exec create error:", err)
+			conn.Close(websocket.StatusInternalError, "Failed to create exec instance")
 			return
 		}
 
-		// Attach to exec instance
-		attachResp, err := docker.ContainerExecAttach(ctx, execResp.ID, types.ExecStartCheck{
+		// Attach to the exec instance
+		attachResp, err := dockerClient.ContainerExecAttach(ctx, execResp.ID, types.ExecStartCheck{
 			Detach: false,
 			Tty:    true,
 		})
 		if err != nil {
 			log.Println("exec attach error:", err)
+			conn.Close(websocket.StatusInternalError, "Failed to attach to exec")
 			return
 		}
 		defer attachResp.Close()
@@ -57,7 +59,7 @@ func TerminalHandler(docker *client.Client) http.HandlerFunc {
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 
-		// WS → container stdin
+		// WebSocket → container stdin
 		go func() {
 			defer cancel()
 			for {
@@ -80,7 +82,7 @@ func TerminalHandler(docker *client.Client) http.HandlerFunc {
 			}
 		}()
 
-		// container stdout/stderr → WS
+		// container stdout/stderr → WebSocket
 		go func() {
 			defer cancel()
 			buf := make([]byte, 4096)
@@ -104,7 +106,7 @@ func TerminalHandler(docker *client.Client) http.HandlerFunc {
 			}
 		}()
 
-		// Wait for context cancellation (when any goroutine finishes)
+		// Wait for context cancellation
 		<-ctx.Done()
 	}
 }
