@@ -28,7 +28,12 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to create Docker client:", err)
 	}
-	defer dockerClient.Close()
+	defer func(dockerClient *client.Client) {
+		err := dockerClient.Close()
+		if err != nil {
+			return
+		}
+	}(dockerClient)
 
 	// Test Docker connection
 	_, err = dockerClient.Ping(context.Background())
