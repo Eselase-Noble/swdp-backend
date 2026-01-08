@@ -15,9 +15,16 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("No .env file found, using system environment variables")
+	}
+
 	cfg := config.Load()
 	db := database.Connect(cfg.DBUrl)
 	//database.RunMigrations(db)
