@@ -22,7 +22,7 @@ type userResponse struct {
 	Role   string `json:"role"`
 }
 
-func RegisterAuth(r chi.Router, db *pgxpool.Pool, cfg *config.Config) {
+func RegisterUsers(r chi.Router, db *pgxpool.Pool, cfg *config.Config) {
 	// User management
 	r.Post("/users", createUser(db))
 	r.Put("/users/{userId}", updateUser(db))
@@ -83,32 +83,31 @@ func updateUser(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		if req.Password != "" {
-			hash, err := auth.HashPassword(req.Password)
-			if err != nil {
-				http.Error(w, "Password error", http.StatusInternalServerError)
-				return
-			}
-
-			_, err = db.Exec(
-				r.Context(),
-				`UPDATE users SET email=$1, password=$2, role=$3 WHERE userId=$4`,
-				req.Email, hash, req.Role, userId,
-			)
-			if err != nil {
-				http.Error(w, "Update failed", http.StatusInternalServerError)
-				return
-			}
-		} else {
-			_, err := db.Exec(
-				r.Context(),
-				`UPDATE users SET email=$1, role=$2 WHERE userId=$3`,
-				req.Email, req.Role, userId,
-			)
-			if err != nil {
-				http.Error(w, "Update failed", http.StatusInternalServerError)
-				return
-			}
+		//if req.Password != "" {
+		//	hash, err := auth.HashPassword(req.Password)
+		//	if err != nil {
+		//		http.Error(w, "Password error", http.StatusInternalServerError)
+		//		return
+		//	}
+		//
+		//	_, err = db.Exec(
+		//		r.Context(),
+		//		`UPDATE users SET email=$1, password=$2, role=$3 WHERE userId=$4`,
+		//		req.Email, hash, req.Role, userId,
+		//	)
+		//	if err != nil {
+		//		http.Error(w, "Update failed", http.StatusInternalServerError)
+		//		return
+		//	}
+		//} else {
+		_, err := db.Exec(
+			r.Context(),
+			`UPDATE users SET email=$1, role=$2 WHERE userId=$3`,
+			req.Email, req.Role, userId,
+		)
+		if err != nil {
+			http.Error(w, "Update failed", http.StatusInternalServerError)
+			return
 		}
 
 		w.WriteHeader(http.StatusOK)

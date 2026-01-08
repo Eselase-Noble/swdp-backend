@@ -8,6 +8,7 @@ import (
 	"web-based-dev-platform-backend/internal/config"
 	"web-based-dev-platform-backend/internal/database"
 	"web-based-dev-platform-backend/internal/projects"
+	"web-based-dev-platform-backend/internal/users"
 	"web-based-dev-platform-backend/internal/websocket"
 	"web-based-dev-platform-backend/internal/workspaces"
 
@@ -19,6 +20,7 @@ import (
 func main() {
 	cfg := config.Load()
 	db := database.Connect(cfg.DBUrl)
+	//database.RunMigrations(db)
 
 	// Initialize Docker client
 	dockerClient, err := client.NewClientWithOpts(
@@ -53,6 +55,7 @@ func main() {
 		projects.RegisterProjects(api, db)
 		workspaces.RegisterWorkspaces(api, db, cfg)
 		websocket.RegisterWebSockets(api, dockerClient)
+		users.RegisterUsers(api, db, cfg)
 	})
 
 	log.Println("🚀 SWDP backend server running on :8282")

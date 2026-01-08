@@ -1,0 +1,79 @@
+# =========================
+# Go
+# =========================
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Build directories
+/bin/
+/build/
+/dist/
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Coverage / profiling
+coverage.out
+*.coverprofile
+*.pprof
+
+# =========================
+# Environment files
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Editor / OS
+# =========================
+# VS Code
+.vscode/
+*.code-workspace
+
+# IntelliJ / GoLand
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+
+# =========================
+# Docker
+# =========================
+# Docker overrides
+docker-compose.override.yml
+
+# =========================
+# Database
+# =========================
+# Local database data
+postgres-data/
+db-data/
+
+# Migration state (if any local tooling writes files)
+schema.sql
+*.dump
+
+# =========================
+# Temporary / Misc
+# =========================
+tmp/
+temp/
+.cache/
