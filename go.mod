@@ -4,7 +4,8 @@ go 1.25
 
 require (
 	github.com/coder/websocket v1.8.14
-	github.com/docker/docker v25.0.3+incompatible
+	github.com/docker/docker v24.0.7+incompatible
+	//github.com/docker/docker v28.3.3+incompatible
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
@@ -25,7 +26,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/moby/term v0.5.2 // indirect
 	github.com/morikuni/aec v1.1.0 // indirect
-	//github.com/moby/moby v28.5.2+incompatible // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
