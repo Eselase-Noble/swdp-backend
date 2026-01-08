@@ -24,10 +24,10 @@ type userResponse struct {
 
 func RegisterUsers(r chi.Router, db *pgxpool.Pool, cfg *config.Config) {
 	// User management
-	r.Post("/users", createUser(db))
+	r.Post("/users/create-user", createUser(db))
 	r.Put("/users/{userId}", updateUser(db))
 	r.Delete("/users/{userId}", deleteUser(db))
-	r.Get("/users", getUsers(db))
+	r.Get("/users/all", getUsers(db))
 	r.Get("/users/{userId}", getUser(db))
 }
 
@@ -136,7 +136,7 @@ func getUsers(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rows, err := db.Query(
 			r.Context(),
-			"SELECT userId, email, role FROM users",
+			"SELECT user_id, email, role FROM users",
 		)
 		if err != nil {
 			http.Error(w, "Query failed", http.StatusInternalServerError)

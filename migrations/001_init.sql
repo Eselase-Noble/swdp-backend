@@ -1,12 +1,22 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+
+-- TRUNCATE TABLE
+--     audit_logs,
+--     workspaces,
+--     project_members,
+--     projects,
+--     users
+-- RESTART IDENTITY CASCADE;
+
+
 -------------------------------------------------
 -- USERS
 -------------------------------------------------
 CREATE TABLE users (
                        user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                       username UNIQUE NOT NULL ,
-                       name ,
+                       username TEXT UNIQUE NOT NULL ,
+                       name TEXT NOT NULL ,
                        email TEXT UNIQUE NOT NULL,
                        password_hash TEXT NOT NULL,
                        role TEXT NOT NULL,
@@ -28,6 +38,7 @@ CREATE TYPE environment_enum AS ENUM ('dev', 'staging', 'prod');
 CREATE TABLE projects (
                           project_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                           project_name TEXT NOT NULL,
+                          description TEXT,
                           owner_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                           version INT,
                           environment environment_enum NOT NULL DEFAULT 'dev',  -- enum with default

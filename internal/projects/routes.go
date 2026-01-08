@@ -81,7 +81,7 @@ func createProject(db *pgxpool.Pool) http.HandlerFunc {
 func listProjects(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		rows, err := db.Query(r.Context(), `SELECT id, name, owner_id FROM projects`)
+		rows, err := db.Query(r.Context(), `SELECT project_id, project_name, owner_id FROM projects`)
 		if err != nil {
 			http.Error(w, "Error listing projects", http.StatusInternalServerError)
 			return
@@ -90,15 +90,15 @@ func listProjects(db *pgxpool.Pool) http.HandlerFunc {
 
 		var projects []map[string]string
 		for rows.Next() {
-			var id, name, owner string
-			if err := rows.Scan(&id, &name, &owner); err != nil {
+			var project_id, project_name, owner_id string
+			if err := rows.Scan(&project_id, &project_name, &owner_id); err != nil {
 				http.Error(w, "Error scanning project row", http.StatusInternalServerError)
 				return
 			}
 			projects = append(projects, map[string]string{
-				"projectId":   id,
-				"projectName": name,
-				"Owner":       owner,
+				"projectId":   project_id,
+				"projectName": project_name,
+				"owner":       owner_id,
 			})
 		}
 
