@@ -46,16 +46,42 @@ func createProject(db *pgxpool.Pool) http.HandlerFunc {
 }
 
 // List all the projects assigned to the logged user
+//func listProjects(db *pgxpool.Pool) http.HandlerFunc {
+//	return func(w http.ResponseWriter, r *http.Request) {
+//		//userId := r.Context().Value("userId").(string)
+//
+//		rows, err := db.Query(
+//			r.Context(),
+//			`SELECT projectId, projectName, description
+//             FROM projects
+//             WHERE projectId IN (SELECT projectId FROM project_members) OR createdBy IS NOT NULL`,
+//		)
+//
+//		if err != nil {
+//			http.Error(w, "Error listing projects", http.StatusInternalServerError)
+//			return
+//		}
+//		defer rows.Close()
+//
+//		var projects []map[string]string
+//		for rows.Next() {
+//			var projectId, projectName, description string
+//			rows.Scan(&projectId, &projectName, &description)
+//			projects = append(projects, map[string]string{
+//				"projectId":   projectId,
+//				"projectName": projectName,
+//				"description": description,
+//			})
+//		}
+//
+//		json.NewEncoder(w).Encode(projects)
+//	}
+//}
+
 func listProjects(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userId := r.Context().Value("userId").(string)
 
-		rows, err := db.Query(
-			r.Context(),
-			`SELECT projectId, projectName, description FROM projects 
-				WHERE createdBy = $1 OR projectId IN (SELECT projectId FROM project_members  WHERE userId = $1)`, userId,
-		)
-
+		rows, err := db.Query(r.Context(), `SELECT id, name, owner_id FROM projects`)
 		if err != nil {
 			http.Error(w, "Error listing projects", http.StatusInternalServerError)
 			return
@@ -64,15 +90,29 @@ func listProjects(db *pgxpool.Pool) http.HandlerFunc {
 
 		var projects []map[string]string
 		for rows.Next() {
-			var projectId, projectName, description string
-			rows.Scan(&projectId, &projectName, &description)
+			var id, name, owner string
+			if err := rows.Scan(&id, &name, &owner); err != nil {
+				http.Error(w, "Error scanning project row", http.StatusInternalServerError)
+				return
+			}
 			projects = append(projects, map[string]string{
-				"projectId":   projectId,
-				"projectName": projectName,
-				"description": description,
+				"projectId":   id,
+				"projectName": name,
+				"Owner":       owner,
 			})
 		}
 
+		w.Header().Set("Content-Type", "application/json")
+
+		if len(projects) == 0 {
+			// No projects found
+			json.NewEncoder(w).Encode(map[string]string{
+				"message": "No project available at the moment",
+			})
+			return
+		}
+
+		// Projects found
 		json.NewEncoder(w).Encode(projects)
 	}
 }
