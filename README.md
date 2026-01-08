@@ -101,13 +101,16 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ## 🚀 Running the Backend
 ### Prerequisites
 
-- Go ≥ 1.21
+- Go ≥ 1.25
 
 - Docker (running)
 
 - PostgreSQL (running)
 
 - Run Locally
+```bash
+  go mod tidy
+```
 ```bash
   go run ./cmd/api
 ```
@@ -218,5 +221,6 @@ All rights reserved.
 👤 Author
 
 Noble Eselase Vulley (Nobleson)
+
 Software Engineer | Platform Architect
 ```
