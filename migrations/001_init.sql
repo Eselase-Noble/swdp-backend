@@ -4,7 +4,9 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- USERS
 -------------------------------------------------
 CREATE TABLE users (
-                       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                       user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                       username UNIQUE NOT NULL ,
+                       name ,
                        email TEXT UNIQUE NOT NULL,
                        password_hash TEXT NOT NULL,
                        role TEXT NOT NULL,
@@ -19,10 +21,16 @@ CREATE TABLE users (
 -------------------------------------------------
 -- PROJECTS
 -------------------------------------------------
+-- 1️⃣ Create the enum type for environments
+CREATE TYPE environment_enum AS ENUM ('dev', 'staging', 'prod');
+
+-- 2️⃣ Create the projects table
 CREATE TABLE projects (
-                          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                          name TEXT NOT NULL,
-                          owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                          project_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                          project_name TEXT NOT NULL,
+                          owner_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                          version INT,
+                          environment environment_enum NOT NULL DEFAULT 'dev',  -- enum with default
 
                           created_by UUID,
                           updated_by UUID,
@@ -31,12 +39,13 @@ CREATE TABLE projects (
                           deleted_yn BOOLEAN NOT NULL DEFAULT false
 );
 
+
 -------------------------------------------------
 -- PROJECT MEMBERS
 -------------------------------------------------
 CREATE TABLE project_members (
-                                 user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                                 project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                                 user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                                 project_id UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
                                  role TEXT NOT NULL,
 
                                  created_by UUID,
@@ -53,8 +62,8 @@ CREATE TABLE project_members (
 -------------------------------------------------
 CREATE TABLE workspaces (
                             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                            project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-                            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            project_id UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+                            user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                             status TEXT NOT NULL,
 
                             created_by UUID,
