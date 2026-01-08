@@ -11,6 +11,8 @@ func RegisterWorkspaces(r chi.Router, db *pgxpool.Pool, cfg *config.Config) {
 	r.Post("/projects/{projectID}/workspaces", createWorkspace(db))
 	r.Post("/workspaces/{id}/start", startWorkspace(db, cfg))
 	r.Post("/workspaces/{id}/stop", stopWorkspace(db, cfg))
+	r.Delete("/workspaces/{id}", deleteWorkspace(db, cfg))
+	r.Get("/workspaces/{id}/status", workspaceStatus(db))
 }
 
 //func assertWorkSpaceOwner(ctx context.Context, db *pgxpool.Pool, wsID, userid string) error {
