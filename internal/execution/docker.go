@@ -3,8 +3,9 @@ package execution
 import (
 	"context"
 
-	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/client"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 )
 
 func StartContainer(cli *client.Client, name, image, volume string) error {
@@ -34,7 +35,7 @@ func StartContainer(cli *client.Client, name, image, volume string) error {
 		return err
 	}
 
-	return cli.ContainerStart(ctx, name, container.StartOptions{})
+	return cli.ContainerStart(ctx, name, types.ContainerStartOptions{})
 }
 
 func StopContainer(cli *client.Client, volume string) {

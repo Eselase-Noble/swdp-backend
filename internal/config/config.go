@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/moby/moby/client"
+	"github.com/docker/docker/client"
 )
 
 // Interface for the Config Struct
