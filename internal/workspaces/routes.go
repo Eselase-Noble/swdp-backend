@@ -19,7 +19,7 @@ func RegisterWorkspaces(r chi.Router, db *pgxpool.Pool, cfg *config.Config) {
 func createWorkspace(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		projectID := chi.URLParam(r, "projectID")
-		userID := r.Context().Value("userID").(string)
+		userID := r.Context().Value("userId").(string)
 
 		id := uuid.New()
 
