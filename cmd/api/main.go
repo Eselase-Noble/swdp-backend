@@ -23,9 +23,11 @@ import (
 	"context"
 	"log"
 	"net/http"
+	_ "web-based-dev-platform-backend/docs"
 	"web-based-dev-platform-backend/internal/auth"
 	"web-based-dev-platform-backend/internal/config"
 	"web-based-dev-platform-backend/internal/database"
+	middleware2 "web-based-dev-platform-backend/internal/middleware"
 	"web-based-dev-platform-backend/internal/projects"
 	"web-based-dev-platform-backend/internal/users"
 	"web-based-dev-platform-backend/internal/websocket"
@@ -35,6 +37,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 func main() {
@@ -76,12 +79,23 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
+	r.Get("/swagger/**", httpSwagger.WrapHandler)
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("OK"))
+	})
+
 	r.Route("/api", func(api chi.Router) {
 		auth.RegisterAuth(api, db, cfg)
-		projects.RegisterProjects(api, db)
-		workspaces.RegisterWorkspaces(api, db, cfg)
-		websocket.RegisterWebSockets(api, dockerClient)
-		users.RegisterUsers(api, db, cfg)
+
+		// Secured routes
+		api.Group(func(protected chi.Router) {
+			protected.Use(middleware2.JWTAuth(cfg.JWTSecret))
+
+			projects.RegisterProjects(protected, db)
+			workspaces.RegisterWorkspaces(protected, db, cfg)
+			users.RegisterUsers(protected, db, cfg)
+			websocket.RegisterWebSockets(protected, dockerClient)
+		})
 	})
 
 	log.Println("🚀 SWDP backend server running on :8282")

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+	"web-based-dev-platform-backend/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -90,6 +91,12 @@ func createProject(db *pgxpool.Pool) http.HandlerFunc {
 // @Router       /projects [get]
 func listProjects(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		user := middleware.GetUser(r.Context())
+		if user == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 
 		rows, err := db.Query(r.Context(), `SELECT project_id, project_name, owner_id FROM projects`)
 		if err != nil {
