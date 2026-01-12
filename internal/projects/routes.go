@@ -78,6 +78,16 @@ func createProject(db *pgxpool.Pool) http.HandlerFunc {
 //	}
 //}
 
+// ListProjects godoc
+// @Summary      List projects
+// @Description  Get all projects for the authenticated user
+// @Tags         Projects
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200 {array} models.Project
+// @Failure      401 {object} map[string]string
+// @Router       /projects [get]
 func listProjects(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 

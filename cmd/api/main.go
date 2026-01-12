@@ -1,5 +1,24 @@
 package main
 
+// @title           SWDP Backend API
+// @version         1.0
+// @description     Web-Based Software Development Platform Backend
+// @termsOfService  https://example.com/terms/
+
+// @contact.name   Noble Eselase Vulley
+// @contact.email  eselasenobleson@gmail.com
+
+// @license.name  Proprietary
+// @license.url   https://example.com/license
+
+// @host      localhost:8282
+// @BasePath  /api
+// @schemes   http
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+
 import (
 	"context"
 	"log"
