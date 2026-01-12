@@ -86,9 +86,9 @@ func createProject(db *pgxpool.Pool) http.HandlerFunc {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Success      200 {array} models.Project
+// @Success      200 {array} projects.ProjectResponse
 // @Failure      401 {object} map[string]string
-// @Router       /projects [get]
+// @Router       /projects/all [get]
 func listProjects(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 

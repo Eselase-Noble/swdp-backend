@@ -1,7 +1,90 @@
 {
+    "schemes": [
+        "http"
+    ],
     "swagger": "2.0",
     "info": {
-        "contact": {}
+        "description": "Web-Based Software Development Platform Backend",
+        "title": "SWDP Backend API",
+        "termsOfService": "https://example.com/terms/",
+        "contact": {
+            "name": "Noble Eselase Vulley",
+            "email": "eselasenobleson@gmail.com"
+        },
+        "license": {
+            "name": "Proprietary",
+            "url": "https://example.com/license"
+        },
+        "version": "1.0"
     },
-    "paths": {}
+    "host": "localhost:8282",
+    "basePath": "/api",
+    "paths": {
+        "/projects/all": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all projects for the authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "summary": "List projects",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/internal_projects.ProjectResponse"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "internal_projects.ProjectResponse": {
+            "type": "object",
+            "properties": {
+                "owner_id": {
+                    "type": "string",
+                    "example": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                },
+                "project_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "project_name": {
+                    "type": "string",
+                    "example": "SWDP Backend"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
 }
