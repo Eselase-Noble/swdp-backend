@@ -38,6 +38,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 	httpSwagger "github.com/swaggo/http-swagger"
+	ginprometheus "github.com/zsais/go-gin-prometheus"
 )
 
 func main() {
@@ -49,6 +50,7 @@ func main() {
 
 	cfg := config.Load()
 	db := database.Connect(cfg.DBUrl)
+	serviceName := config.Config{}.
 	//database.RunMigrations(db)
 
 	// Initialize Docker client
@@ -78,6 +80,9 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
+	p := ginprometheus.NewPrometheus("postmaster_service")
+	p.Use(r)
 
 	r.Get("/swagger/*", httpSwagger.WrapHandler)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
