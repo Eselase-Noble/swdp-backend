@@ -13,6 +13,8 @@ type Config struct {
 	DBUrl        string
 	JWTSecret    string
 	DockerHost   string
+	Port         string
+	ServiceName  string
 	DockerClient *client.Client
 }
 

@@ -23,6 +23,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	_ "web-based-dev-platform-backend/docs"
 	"web-based-dev-platform-backend/internal/auth"
 	"web-based-dev-platform-backend/internal/config"
@@ -37,9 +38,35 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	httpSwagger "github.com/swaggo/http-swagger"
-	ginprometheus "github.com/zsais/go-gin-prometheus"
 )
+
+var (
+	serviceName = getServiceName()
+
+	httpRequestsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "swdp",
+			Subsystem: "http",
+			Name:      "requests_total",
+			Help:      "Total number of HTTP requests",
+		},
+		[]string{"service", "method", "path", "status"},
+	)
+)
+
+func getServiceName() string {
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("No .env file found, using system environment variables")
+	}
+	if s := os.Getenv("SERVICE_NAME"); s != "" {
+		return s
+	}
+	return "unknown-service"
+}
 
 func main() {
 
@@ -50,7 +77,6 @@ func main() {
 
 	cfg := config.Load()
 	db := database.Connect(cfg.DBUrl)
-	serviceName := config.Config{}.
 	//database.RunMigrations(db)
 
 	// Initialize Docker client
@@ -75,14 +101,32 @@ func main() {
 	}
 	log.Println("✅ Successfully connected to Docker daemon")
 
+	// Prometheus
+	prometheus.MustRegister(httpRequestsTotal)
+
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	p := ginprometheus.NewPrometheus("postmaster_service")
-	p.Use(r)
+	// Prometheus middleware
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			next.ServeHTTP(ww, r)
+
+			httpRequestsTotal.WithLabelValues(
+				serviceName,
+				r.Method,
+				r.URL.Path,
+				http.StatusText(ww.Status()),
+			).Inc()
+		})
+	})
+
+	// Routes
+	r.Get("/metrics", promhttp.Handler().ServeHTTP)
 
 	r.Get("/swagger/*", httpSwagger.WrapHandler)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
