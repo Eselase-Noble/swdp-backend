@@ -35,6 +35,7 @@ import (
 	"web-based-dev-platform-backend/internal/workspaces"
 
 	"github.com/docker/docker/client"
+	"github.com/gin-gonic/gin"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
@@ -77,6 +78,7 @@ func main() {
 
 	cfg := config.Load()
 	db := database.Connect(cfg.DBUrl)
+	database := database.ConnectDB(cfg)
 	//database.RunMigrations(db)
 
 	// Initialize Docker client
@@ -139,19 +141,42 @@ func main() {
 		// Secured routes
 		api.Group(func(protected chi.Router) {
 			protected.Use(middleware2.JWTAuth(cfg.JWTSecret))
-
 			projects.RegisterProjects(protected, db)
 			workspaces.RegisterWorkspaces(protected, db, cfg)
-
-			//tracking.TrackingRoutes(r, db)
-			userRepo := &users.Repository{DB: db}
-			userService := &users.Service{Repo: userRepo}
-			userHandler := &users.Handler{Service: userService}
-
-			users.RegisterUsers(protected, db, cfg)
 			websocket.RegisterWebSockets(protected, dockerClient)
 		})
 	})
+
+	r1 := gin.New()
+
+	// Routes
+	//r1.GET("/metrics", promhttp.Handler().ServeHTTP)
+
+	r1.GET("/swagger/*any", func(c *gin.Context) {
+		httpSwagger.WrapHandler(c.Writer, c.Request)
+	})
+
+	// Health check
+	r1.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":  "UP",
+			"service": "postmaster-backend",
+		})
+	})
+	// Auth routes
+	//r1.POST("/auth/register", auth.Register(database))
+	//r1.POST("/auth/login", auth.Login(database))
+
+	api := r1.Group("/swdp/v1/api")
+	api.Use(middleware2.JWT(cfg.JWTSecret))
+	{
+		//tracking.TrackingRoutes(r, db)
+		userRepo := &users.Repository{DB: database}
+		userService := &users.Service{Repo: userRepo}
+		userHandler := &users.Handler{Service: userService}
+
+		users.UserRoutes(api, userHandler)
+	}
 
 	log.Println("🚀 SWDP backend server running on :8282")
 	err = http.ListenAndServe(":8282", r)

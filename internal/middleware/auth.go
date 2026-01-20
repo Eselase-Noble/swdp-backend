@@ -6,6 +6,7 @@ import (
 	"strings"
 	"web-based-dev-platform-backend/internal/auth"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -116,5 +117,59 @@ func JWTAuth(secret string) func(http.Handler) http.Handler {
 			ctx := context.WithValue(r.Context(), UserContextKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
+	}
+}
+
+func JWT(secret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get the Authorization header
+		header := c.GetHeader("Authorization")
+
+		if header == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Authorization header missing",
+			})
+			return
+		}
+
+		if !strings.HasPrefix(header, "Bearer ") {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Authorization header must start with 'Bearer '",
+			})
+			return
+		}
+
+		// Extract the token string
+		tokenStr := strings.TrimPrefix(header, "Bearer ")
+
+		// Parse and validate the token
+		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+			// Ensure the signing method is HMAC
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrTokenSignatureInvalid
+			}
+			return []byte(secret), nil
+		})
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid token: " + err.Error(),
+			})
+			return
+		}
+
+		if !token.Valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Token is invalid or expired",
+			})
+			return
+		}
+
+		// Optionally, set token claims in context
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			c.Set("claims", claims)
+		}
+
+		c.Next()
 	}
 }

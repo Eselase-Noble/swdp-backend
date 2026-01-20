@@ -21,12 +21,12 @@ func NewHandler(service *Service) *Handler {
 // CreateUser godoc
 // @Summary      Create user
 // @Description  Creates a new user
-// @Tags         Users
+// @Tags         User
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        user  body      Users  true  "User payload"
-// @Success      201   {object}  Users
+// @Param        user  body      User  true  "User"
+// @Success      201   {object}  User
 // @Failure      400   {object}  map[string]string
 // @Failure      500   {object}  map[string]string
 // @Router       /users/add [post]
@@ -53,11 +53,11 @@ func (h *Handler) CreateUser(c *gin.Context) {
 // GetUserByID godoc
 // @Summary      Get user
 // @Description  Retrieves a user by ID
-// @Tags         Users
+// @Tags         User
 // @Produce      json
 // @Security     BearerAuth
 // @Param        id   path      string  true  "User ID"
-// @Success      200  {object}  Users
+// @Success      200  {object}  User
 // @Failure      404  {object}  map[string]string
 // @Router       /users/get/{id} [get]
 func (h *Handler) GetUserByID(c *gin.Context) {
@@ -83,10 +83,10 @@ func (h *Handler) GetUserByID(c *gin.Context) {
 // ListUsers godoc
 // @Summary      List users
 // @Description  Retrieves all users
-// @Tags         Users
+// @Tags         User
 // @Produce      json
 // @Security     BearerAuth
-// @Success      200  {array}   Users
+// @Success      200  {array}   User
 // @Router       /users/all [get]
 func (h *Handler) ListUsers(c *gin.Context) {
 	users, err := h.Service.GetAllUsers()
@@ -105,7 +105,7 @@ func (h *Handler) ListUsers(c *gin.Context) {
 // UpdateUser godoc
 // @Summary      Update user
 // @Description  Updates user fields
-// @Tags         Users
+// @Tags         User
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
@@ -142,7 +142,7 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 // DeleteUser godoc
 // @Summary      Delete user
 // @Description  Soft deletes a user
-// @Tags         Users
+// @Tags         User
 // @Security     BearerAuth
 // @Param        id   path      string  true  "User ID"
 // @Success      204

@@ -21,11 +21,12 @@ type Config struct {
 // Load the configuration from the environment variable
 func Load() *Config {
 	cfg := &Config{
-		Env:        get("ENV", "development"),
-		DBUrl:      must("DATABASE_URL"),
-		JWTSecret:  must("JWT_SECRET"),
-		DockerHost: get("DOCKER_HOST", "unix:///var/run/docker.sock"),
-		Port:       get("PORT", "8283"),
+		Env:         get("ENV", "development"),
+		DBUrl:       must("DATABASE_URL"),
+		JWTSecret:   must("JWT_SECRET"),
+		DockerHost:  get("DOCKER_HOST", "unix:///var/run/docker.sock"),
+		Port:        get("PORT", "8282"),
+		ServiceName: get("SERVICE_NAME", "swdp-backend"),
 	}
 	return cfg
 }
