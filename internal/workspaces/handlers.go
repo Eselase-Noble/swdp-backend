@@ -1,144 +1,143 @@
 package workspaces
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
-	"web-based-dev-platform-backend/internal/config"
-	"web-based-dev-platform-backend/internal/execution"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func assertWorkSpaceOwner(ctx context.Context, db *pgxpool.Pool, wsID, userid string) error {
-	var ok bool
-	err := db.QueryRow(ctx, `SELECT  EXISTS ( SELECT 1 FROM workspaces WHERE id = $1 AND userId = $2`, wsID, userid).Scan(&ok)
-	if err != nil || !ok {
-		return errors.New("workspace not owned by this user")
-	}
-	return nil
+type Handler struct {
+	Service *Service
 }
 
-func createWorkspace(db *pgxpool.Pool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		projectID := chi.URLParam(r, "projectID")
-		userID := r.Context().Value("userId").(string)
-
-		id := uuid.New()
-
-		_, err := db.Exec(
-			r.Context(),
-			"INSERT INTO workspaces(id, project_id, user_id, status) VALUES ($1,$2,$3,'created')",
-			id, projectID, userID,
-		)
-		if err != nil {
-			http.Error(w, "db error", http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusCreated)
-	}
+func NewHandler(service *Service) *Handler {
+	return &Handler{Service: service}
 }
 
-func startWorkspace(db *pgxpool.Pool, cfg *config.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		wsID := chi.URLParam(r, "id")
-		userID := r.Context().Value("userId").(string)
+//
+// Create Workspace
+//
 
-		if err := assertWorkSpaceOwner(r.Context(), db, wsID, userID); err != nil {
-			http.Error(w, "forbidden", 403)
-			return
-		}
-
-		var status string
-		db.QueryRow(r.Context(), "SELECT status FROM workspaces WHERE id=$1", wsID).Scan(&status)
-		if status == "running" {
-			w.WriteHeader(http.StatusConflict)
-			return
-		}
-
-		err := execution.StartContainer(
-			cfg.DockerClient,
-			"ws-"+wsID,
-			"node:20",
-			"/data/workspaces/"+wsID,
-		)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		db.Exec(r.Context(),
-			"UPDATE workspaces SET status='running' WHERE id=$1", wsID)
-
-		w.WriteHeader(http.StatusOK)
+// CreateWorkspace godoc
+// @Summary      Create workspace
+// @Description  Creates a workspace under a project
+// @Tags         Workspaces
+// @Produce      json
+// @Security     BearerAuth
+// @Param        project_id  query  string  true  "Project ID"
+// @Success      201
+// @Failure      400  {object}  map[string]string
+// @Router       /workspaces [post]
+func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
+	projectID, err := uuid.Parse(r.URL.Query().Get("project_id"))
+	if err != nil {
+		http.Error(w, "invalid project id", 400)
+		return
 	}
+
+	userID, _ := uuid.Parse(r.Context().Value("userId").(string))
+
+	if err := h.Service.CreateWorkspace(r.Context(), projectID, userID); err != nil {
+		http.Error(w, "failed to create workspace", 500)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
 }
 
-func stopWorkspace(db *pgxpool.Pool, cfg *config.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		wsID := chi.URLParam(r, "id")
-		userID := r.Context().Value("userID").(string)
+//
+// Start Workspace
+//
 
-		if err := assertWorkSpaceOwner(r.Context(), db, wsID, userID); err != nil {
-			http.Error(w, "forbidden", 403)
-			return
-		}
+// StartWorkspace godoc
+// @Summary      Start workspace
+// @Tags         Workspaces
+// @Security     BearerAuth
+// @Param        id  path  string  true  "Workspace ID"
+// @Success      200
+// @Router       /workspaces/{id}/start [post]
+func (h *Handler) StartWorkspace(w http.ResponseWriter, r *http.Request) {
+	id, _ := uuid.Parse(chi.URLParam(r, "id"))
+	userID, _ := uuid.Parse(r.Context().Value("userId").(string))
 
-		execution.StopContainer(cfg.DockerClient, "ws-"+wsID)
-
-		_, err := db.Exec(r.Context(),
-			"UPDATE workspaces SET status='stopped' WHERE id=$1", wsID)
-		if err != nil {
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
+	if err := h.Service.StartWorkspace(id, userID); err != nil {
+		http.Error(w, "forbidden", 403)
+		return
 	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
-func deleteWorkspace(db *pgxpool.Pool, cfg *config.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		wsID := chi.URLParam(r, "id")
-		userId := r.Context().Value("userId").(string)
+//
+// Stop Workspace
+//
 
-		if err := assertWorkSpaceOwner(r.Context(), db, wsID, userId); err != nil {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
+// StopWorkspace godoc
+// @Summary      Stop workspace
+// @Tags         Workspaces
+// @Security     BearerAuth
+// @Param        id  path  string  true  "Workspace ID"
+// @Success      200
+// @Router       /workspaces/{id}/stop [post]
+func (h *Handler) StopWorkspace(w http.ResponseWriter, r *http.Request) {
+	id, _ := uuid.Parse(chi.URLParam(r, "id"))
+	userID, _ := uuid.Parse(r.Context().Value("userId").(string))
 
-		execution.StopContainer(cfg.DockerClient, "ws-"+wsID)
-
-		_, err := db.Exec(r.Context(), `DELETE FROM workspaces WHERE id = $1`, wsID)
-		if err != nil {
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+	if err := h.Service.StopWorkspace(id, userID); err != nil {
+		http.Error(w, "forbidden", 403)
+		return
 	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
-func workspaceStatus(db *pgxpool.Pool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		wsID := chi.URLParam(r, "id")
-		userID := r.Context().Value("userID").(string)
+//
+// Workspace Status
+//
 
-		if err := assertWorkSpaceOwner(r.Context(), db, wsID, userID); err != nil {
-			http.Error(w, "forbidden", 403)
-			return
-		}
+// WorkspaceStatus godoc
+// @Summary      Workspace status
+// @Tags         Workspaces
+// @Security     BearerAuth
+// @Param        id  path  string  true  "Workspace ID"
+// @Success      200  {object}  map[string]string
+// @Router       /workspaces/{id}/status [get]
+func (h *Handler) WorkspaceStatus(w http.ResponseWriter, r *http.Request) {
+	id, _ := uuid.Parse(chi.URLParam(r, "id"))
+	userID, _ := uuid.Parse(r.Context().Value("userId").(string))
 
-		var status string
-		err := db.QueryRow(r.Context(), "SELECT status FROM workspaces WHERE id=$1", wsID).Scan(&status)
-		if err != nil {
-			http.Error(w, "not found", 404)
-			return
-		}
-
-		json.NewEncoder(w).Encode(map[string]string{
-			"status": status,
-		})
+	status, err := h.Service.GetStatus(id, userID)
+	if err != nil {
+		http.Error(w, "not found", 404)
+		return
 	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": string(status),
+	})
+}
+
+//
+// Delete Workspace
+//
+
+// DeleteWorkspace godoc
+// @Summary      Delete workspace
+// @Tags         Workspaces
+// @Security     BearerAuth
+// @Param        id  path  string  true  "Workspace ID"
+// @Success      204
+// @Router       /workspaces/{id} [delete]
+func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
+	id, _ := uuid.Parse(chi.URLParam(r, "id"))
+	userID, _ := uuid.Parse(r.Context().Value("userId").(string))
+
+	if err := h.Service.DeleteWorkspace(id, userID); err != nil {
+		http.Error(w, "forbidden", 403)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

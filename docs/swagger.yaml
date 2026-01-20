@@ -1,5 +1,31 @@
 basePath: /swdp/v1/api
 definitions:
+  projectmembers.AddProjectMemberRequest:
+    properties:
+      role:
+        type: string
+      user_id:
+        type: string
+    type: object
+  projects.Project:
+    properties:
+      created_at:
+        type: string
+      deletedYN:
+        $ref: '#/definitions/users.DeleteYn'
+      environment:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      owner_id:
+        type: string
+      updated_at:
+        type: string
+      version:
+        type: integer
+    type: object
   projects.ProjectResponse:
     properties:
       owner_id:
@@ -12,6 +38,14 @@ definitions:
         example: SWDP Backend
         type: string
     type: object
+  users.DeleteYn:
+    enum:
+    - "Y"
+    - "N"
+    type: string
+    x-enum-varnames:
+    - DeleteYes
+    - DeleteNo
   users.User:
     type: object
 host: localhost:8282
@@ -27,6 +61,101 @@ info:
   title: SWDP Backend API
   version: "1.0"
 paths:
+  /projects:
+    get:
+      description: Retrieves all projects owned by the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/projects.Project'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List projects
+      tags:
+      - Projects
+    post:
+      consumes:
+      - application/json
+      description: Creates a new project owned by the authenticated user
+      parameters:
+      - description: Project payload
+        in: body
+        name: project
+        required: true
+        schema:
+          $ref: '#/definitions/projects.Project'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create project
+      tags:
+      - Projects
+  /projects/{project_id}/members:
+    post:
+      consumes:
+      - application/json
+      description: Adds a user to a project with a role
+      parameters:
+      - description: Project ID
+        in: path
+        name: project_id
+        required: true
+        type: string
+      - description: Member payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/projectmembers.AddProjectMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add project member
+      tags:
+      - Project Members
   /projects/all:
     get:
       consumes:
@@ -189,6 +318,37 @@ paths:
       summary: Update user
       tags:
       - User
+  /workspaces:
+    post:
+      description: Creates a workspace for the authenticated user in a project
+      parameters:
+      - description: Project ID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create workspace
+      tags:
+      - Workspaces
 schemes:
 - http
 securityDefinitions:
