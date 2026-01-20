@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // Repository handles database operations for users.
 type Repository struct {
-	DB *gorm.DB // assume DB is *gorm.DB
+	DB *gorm.DB
 }
 
 func NewRepository(db *gorm.DB) *Repository {
@@ -25,7 +24,7 @@ func (r *Repository) AddUser(user *User) error {
 }
 
 // GetUserByID retrieves a user by ID if not deleted.
-func (r *Repository) GetUserByID(userID uuid.UUID) (*User, error) {
+func (r *Repository) GetUserByID(userID string) (*User, error) {
 	var user User
 	err := r.DB.
 		Where("userId = ? AND deleteYn = ?", userID, DeleteNo).
@@ -43,7 +42,7 @@ func (r *Repository) GetAllUsers() ([]User, error) {
 }
 
 // UpdateUser updates allowed fields of a user.
-func (r *Repository) UpdateUser(userID uuid.UUID, updatedData map[string]interface{}) error {
+func (r *Repository) UpdateUser(userID string, updatedData map[string]interface{}) error {
 	return r.DB.
 		Model(&User{}).
 		Where("user_id = ? AND delete_yn = ?", userID, DeleteNo).
@@ -51,7 +50,7 @@ func (r *Repository) UpdateUser(userID uuid.UUID, updatedData map[string]interfa
 }
 
 // DeleteUser soft-deletes a user.
-func (r *Repository) DeleteUser(userID uuid.UUID) error {
+func (r *Repository) DeleteUser(userID string) error {
 	return r.DB.
 		Model(&User{}).
 		Where("user_id = ?", userID).

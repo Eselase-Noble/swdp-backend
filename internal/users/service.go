@@ -1,7 +1,5 @@
 package users
 
-import "github.com/google/uuid"
-
 // Service provides user-related business logic.
 type Service struct {
 	Repo *Repository
@@ -12,26 +10,26 @@ func NewService(repo *Repository) *Service {
 }
 
 // AddUser creates a user.
-func (s *Service) AddUser(user *Users) error {
+func (s *Service) AddUser(user *User) error {
 	return s.Repo.AddUser(user)
 }
 
 // GetUserByID retrieves a user by ID.
-func (s *Service) GetUserByID(userID uuid.UUID) (*Users, error) {
+func (s *Service) GetUserByID(userID string) (*User, error) {
 	return s.Repo.GetUserByID(userID)
 }
 
 // GetAllUsers retrieves all users.
-func (s *Service) GetAllUsers() ([]Users, error) {
+func (s *Service) GetAllUsers() ([]User, error) {
 	return s.Repo.GetAllUsers()
 }
 
 // UpdateUser updates a user.
-func (s *Service) UpdateUser(userID uuid.UUID, updatedData map[string]interface{}) error {
+func (s *Service) UpdateUser(userID string, updatedData map[string]interface{}) error {
 	return s.Repo.UpdateUser(userID, updatedData)
 }
 
 // DeleteUser deletes a user.
-func (s *Service) DeleteUser(userID uuid.UUID) error {
+func (s *Service) DeleteUser(userID string) error {
 	return s.Repo.DeleteUser(userID)
 }
