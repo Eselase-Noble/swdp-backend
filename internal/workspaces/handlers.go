@@ -39,7 +39,7 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 
 	userID, _ := uuid.Parse(r.Context().Value("userId").(string))
 
-	if err := h.Service.CreateWorkspace(r.Context(), projectID, userID); err != nil {
+	if err := h.Service.CreateWorkspace(projectID, userID); err != nil {
 		http.Error(w, "failed to create workspace", 500)
 		return
 	}

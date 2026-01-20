@@ -8,10 +8,10 @@ import (
 )
 
 type Handler struct {
-	Service Service
+	Service *Service
 }
 
-func NewHandler(service Service) *Handler {
+func NewHandler(service *Service) *Handler {
 	return &Handler{Service: service}
 }
 
@@ -50,7 +50,7 @@ func (h *Handler) AddProjectMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Service.AddMember(r.Context(), projectID, req.UserID, req.Role); err != nil {
+	if err := h.Service.AddMember(projectID, req.UserID, req.Role); err != nil {
 		http.Error(w, `{"error":"failed to add project member"}`, http.StatusInternalServerError)
 		return
 	}

@@ -1,8 +1,6 @@
 package workspaces
 
 import (
-	"context"
-
 	"github.com/google/uuid"
 )
 
@@ -15,7 +13,6 @@ func NewService(repo *Repository) *Service {
 }
 
 func (s *Service) CreateWorkspace(
-	ctx context.Context,
 	projectID, userID uuid.UUID,
 ) error {
 	ws := &Workspace{

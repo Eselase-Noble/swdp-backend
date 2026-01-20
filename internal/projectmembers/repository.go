@@ -1,23 +1,21 @@
 package projectmembers
 
 import (
-	"context"
-
 	"gorm.io/gorm"
 )
 
-type Repository interface {
-	Add(ctx context.Context, member *ProjectMember) error
+//type Repository interface {
+//	Add(ctx context.Context, member *ProjectMember) error
+//}
+
+type Repository struct {
+	DB *gorm.DB
 }
 
-type repository struct {
-	db *gorm.DB
+func NewRepository(db *gorm.DB) *Repository {
+	return &Repository{DB: db}
 }
 
-func NewRepository(db *gorm.DB) Repository {
-	return &repository{db}
-}
-
-func (r *repository) Add(ctx context.Context, member *ProjectMember) error {
-	return r.db.WithContext(ctx).Create(member).Error
+func (r *Repository) Add(member *ProjectMember) error {
+	return r.DB.Create(member).Error
 }

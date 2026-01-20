@@ -114,11 +114,10 @@ func New(d Deps) http.Handler {
 			projects.RegisterRoutes(protected, projectHandler)
 
 			//Project Members
-
-			projectMemberRepo := projectmembers.NewRepository(d.GormDB)
-			projectMemberService := projectmembers.NewService(projectMemberRepo)
+			projectMemberRepo := &projectmembers.Repository{DB: d.GormDB}
+			projectMemberService := &projectmembers.Service{Repo: projectMemberRepo}
 			projectMemberHandler := projectmembers.NewHandler(projectMemberService)
-			projectmembers.NewHandler(projectMemberHandler)
+			projectmembers.RegisterRoutes(protected, projectMemberHandler)
 
 			// Workspace
 			workSpaceRepo := &workspaces.Repository{DB: d.GormDB}

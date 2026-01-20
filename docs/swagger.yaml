@@ -26,18 +26,6 @@ definitions:
       version:
         type: integer
     type: object
-  projects.ProjectResponse:
-    properties:
-      owner_id:
-        example: f47ac10b-58cc-4372-a567-0e02b2c3d479
-        type: string
-      project_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-      project_name:
-        example: SWDP Backend
-        type: string
-    type: object
   users.DeleteYn:
     enum:
     - "Y"
@@ -156,31 +144,6 @@ paths:
       summary: Add project member
       tags:
       - Project Members
-  /projects/all:
-    get:
-      consumes:
-      - application/json
-      description: Get all projects for the authenticated user
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/projects.ProjectResponse'
-            type: array
-        "401":
-          description: Unauthorized
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - BearerAuth: []
-      summary: List projects
-      tags:
-      - Projects
   /users/add:
     post:
       consumes:
@@ -320,7 +283,7 @@ paths:
       - User
   /workspaces:
     post:
-      description: Creates a workspace for the authenticated user in a project
+      description: Creates a workspace under a project
       parameters:
       - description: Project ID
         in: query
@@ -338,15 +301,77 @@ paths:
             additionalProperties:
               type: string
             type: object
-        "500":
-          description: Internal Server Error
+      security:
+      - BearerAuth: []
+      summary: Create workspace
+      tags:
+      - Workspaces
+  /workspaces/{id}:
+    delete:
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete workspace
+      tags:
+      - Workspaces
+  /workspaces/{id}/start:
+    post:
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+      security:
+      - BearerAuth: []
+      summary: Start workspace
+      tags:
+      - Workspaces
+  /workspaces/{id}/status:
+    get:
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
           schema:
             additionalProperties:
               type: string
             type: object
       security:
       - BearerAuth: []
-      summary: Create workspace
+      summary: Workspace status
+      tags:
+      - Workspaces
+  /workspaces/{id}/stop:
+    post:
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+      security:
+      - BearerAuth: []
+      summary: Stop workspace
       tags:
       - Workspaces
 schemes:
