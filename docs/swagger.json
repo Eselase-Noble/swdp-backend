@@ -18,7 +18,7 @@
         "version": "1.0"
     },
     "host": "localhost:8282",
-    "basePath": "/api",
+    "basePath": "/swdp/v1/api",
     "paths": {
         "/projects/all": {
             "get": {

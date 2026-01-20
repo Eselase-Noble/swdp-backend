@@ -317,7 +317,7 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
 	Host:             "localhost:8282",
-	BasePath:         "/api",
+	BasePath:         "/swdp/v1/api",
 	Schemes:          []string{"http"},
 	Title:            "SWDP Backend API",
 	Description:      "Web-Based Software Development Platform Backend",

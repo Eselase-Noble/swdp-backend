@@ -1,4 +1,4 @@
-basePath: /api
+basePath: /swdp/v1/api
 definitions:
   projects.ProjectResponse:
     properties:

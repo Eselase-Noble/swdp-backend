@@ -1,6 +1,6 @@
 package users
 
-import "github.com/gin-gonic/gin"
+import "github.com/go-chi/chi/v5"
 
 type userRequest struct {
 	Email    string `json:"email"`
@@ -14,17 +14,28 @@ type userResponse struct {
 	Role   string `json:"role"`
 }
 
-func UserRoutes(router *gin.RouterGroup, handler *Handler) {
+func UserRoutes(r chi.Router, handler *Handler) {
 
-	users := router.Group("/users")
-	{
-		users.POST("/add", handler.CreateUser)
-		users.GET("/all", handler.ListUsers)
-		users.GET("/get/:id", handler.GetUserByID)
-		users.PUT("/update/:id", handler.UpdateUser)
-		users.DELETE("/delete/:id", handler.DeleteUser)
-	}
+	r.Route("/users", func(r chi.Router) {
+		r.Post("/add", handler.CreateUser)
+		r.Get("/all", handler.ListUsers)
+		r.Get("/get/{id}", handler.GetUserByID)
+		r.Put("/update/{id}", handler.UpdateUser)
+		r.Delete("/delete/{id}", handler.DeleteUser)
+	})
 }
+
+//func UserRoutes(router chi.Router, handler *Handler) {
+//
+//	users := router.Group("/users")
+//	{
+//		users.POST("/add", handler.CreateUser)
+//		users.GET("/all", handler.ListUsers)
+//		users.GET("/get/:id", handler.GetUserByID)
+//		users.PUT("/update/:id", handler.UpdateUser)
+//		users.DELETE("/delete/:id", handler.DeleteUser)
+//	}
+//}
 
 //func RegisterUsers(r chi.Router, db *pgxpool.Pool, cfg *config.Config) {
 //	// User management

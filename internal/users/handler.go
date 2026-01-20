@@ -1,9 +1,10 @@
 package users
 
 import (
+	"encoding/json"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
@@ -30,20 +31,22 @@ func NewHandler(service *Service) *Handler {
 // @Failure      400   {object}  map[string]string
 // @Failure      500   {object}  map[string]string
 // @Router       /users/add [post]
-func (h *Handler) CreateUser(c *gin.Context) {
+func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var user User
 
-	if err := c.ShouldBindJSON(&user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
 		return
 	}
 
 	if err := h.Service.AddUser(&user); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+		http.Error(w, `{"error":"failed to create user"}`, http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusCreated, user)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(user)
 }
 
 //
@@ -60,20 +63,17 @@ func (h *Handler) CreateUser(c *gin.Context) {
 // @Success      200  {object}  User
 // @Failure      404  {object}  map[string]string
 // @Router       /users/get/{id} [get]
-func (h *Handler) GetUserByID(c *gin.Context) {
-	id := (c.Param("id"))
-	//if err != nil {
-	//	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
-	//	return
-	//}
+func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
 
 	user, err := h.Service.GetUserByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
 		return
 	}
 
-	c.JSON(http.StatusOK, user)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(user)
 }
 
 //
@@ -88,14 +88,15 @@ func (h *Handler) GetUserByID(c *gin.Context) {
 // @Security     BearerAuth
 // @Success      200  {array}   User
 // @Router       /users/all [get]
-func (h *Handler) ListUsers(c *gin.Context) {
+func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.Service.GetAllUsers()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve users"})
+		http.Error(w, `{"error":"failed to retrieve users"}`, http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, users)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(users)
 }
 
 //
@@ -114,25 +115,21 @@ func (h *Handler) ListUsers(c *gin.Context) {
 // @Success      204
 // @Failure      400  {object}  map[string]string
 // @Router       /users/update/{id} [put]
-func (h *Handler) UpdateUser(c *gin.Context) {
-	id := c.Param("id")
-	//if err != nil {
-	//	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
-	//	return
-	//}
+func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
 
 	var updates map[string]interface{}
-	if err := c.ShouldBindJSON(&updates); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
 		return
 	}
 
 	if err := h.Service.UpdateUser(id, updates); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
+		http.Error(w, `{"error":"failed to update user"}`, http.StatusInternalServerError)
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 //
@@ -148,17 +145,13 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 // @Success      204
 // @Failure      400  {object}  map[string]string
 // @Router       /users/delete/{id} [delete]
-func (h *Handler) DeleteUser(c *gin.Context) {
-	id := c.Param("id")
-	//if err != nil {
-	//	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
-	//	return
-	//}
+func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
 
 	if err := h.Service.DeleteUser(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
+		http.Error(w, `{"error":"failed to delete user"}`, http.StatusInternalServerError)
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	w.WriteHeader(http.StatusNoContent)
 }
