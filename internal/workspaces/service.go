@@ -7,11 +7,11 @@ import (
 )
 
 type Service struct {
-	repo *Repository
+	Repo *Repository
 }
 
 func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+	return &Service{Repo: repo}
 }
 
 func (s *Service) CreateWorkspace(
@@ -23,11 +23,11 @@ func (s *Service) CreateWorkspace(
 		UserID:    userID,
 		Status:    WorkspaceCreated,
 	}
-	return s.repo.Create(ws)
+	return s.Repo.Create(ws)
 }
 
 func (s *Service) StartWorkspace(id, userID uuid.UUID) error {
-	ws, err := s.repo.FindOwned(id, userID)
+	ws, err := s.Repo.FindOwned(id, userID)
 	if err != nil {
 		return err
 	}
@@ -36,29 +36,29 @@ func (s *Service) StartWorkspace(id, userID uuid.UUID) error {
 		return nil
 	}
 
-	return s.repo.UpdateStatus(ws.ID, WorkspaceActive)
+	return s.Repo.UpdateStatus(ws.ID, WorkspaceActive)
 }
 
 func (s *Service) StopWorkspace(id, userID uuid.UUID) error {
-	_, err := s.repo.FindOwned(id, userID)
+	_, err := s.Repo.FindOwned(id, userID)
 	if err != nil {
 		return err
 	}
 
-	return s.repo.UpdateStatus(id, WorkspaceStopped)
+	return s.Repo.UpdateStatus(id, WorkspaceStopped)
 }
 
 func (s *Service) DeleteWorkspace(id, userID uuid.UUID) error {
-	_, err := s.repo.FindOwned(id, userID)
+	_, err := s.Repo.FindOwned(id, userID)
 	if err != nil {
 		return err
 	}
 
-	return s.repo.Delete(id)
+	return s.Repo.Delete(id)
 }
 
 func (s *Service) GetStatus(id, userID uuid.UUID) (WorkspaceStatus, error) {
-	ws, err := s.repo.FindOwned(id, userID)
+	ws, err := s.Repo.FindOwned(id, userID)
 	if err != nil {
 		return "", err
 	}

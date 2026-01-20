@@ -5,6 +5,7 @@ import (
 	"web-based-dev-platform-backend/internal/auth"
 	"web-based-dev-platform-backend/internal/config"
 	"web-based-dev-platform-backend/internal/middleware"
+	"web-based-dev-platform-backend/internal/projectmembers"
 	"web-based-dev-platform-backend/internal/projects"
 	"web-based-dev-platform-backend/internal/users"
 	"web-based-dev-platform-backend/internal/websocket"
@@ -106,9 +107,26 @@ func New(d Deps) http.Handler {
 			userHandler := users.NewHandler(userService)
 			users.UserRoutes(protected, userHandler)
 
-			// Other modules
-			projects.RegisterProjects(protected, d.SQLDB)
-			workspaces.RegisterWorkspaces(protected, d.SQLDB, d.Config)
+			// Projects
+			projectRepo := &projects.Repository{DB: d.GormDB}
+			projectService := &projects.Service{Repo: projectRepo}
+			projectHandler := projects.NewHandler(projectService)
+			projects.RegisterRoutes(protected, projectHandler)
+
+			//Project Members
+
+			projectMemberRepo := projectmembers.NewRepository(d.GormDB)
+			projectMemberService := projectmembers.NewService(projectMemberRepo)
+			projectMemberHandler := projectmembers.NewHandler(projectMemberService)
+			projectmembers.NewHandler(projectMemberHandler)
+
+			// Workspace
+			workSpaceRepo := &workspaces.Repository{DB: d.GormDB}
+			workSpaceService := &workspaces.Service{Repo: workSpaceRepo}
+			workSpaceHandler := workspaces.NewHandler(workSpaceService)
+			workspaces.Routes(protected, workSpaceHandler)
+
+			//Websockets
 			websocket.RegisterWebSockets(protected, d.DockerClient)
 		})
 	})
