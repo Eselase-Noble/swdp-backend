@@ -53,8 +53,8 @@ type Deps struct {
 
 func New(d Deps) http.Handler {
 
-	// Prometheus
-	//prometheus.MustRegister(httpRequestsTotal)
+	// Register Prometheus metrics ONCE
+	RegisterMetrics()
 
 	r := chi.NewRouter()
 
