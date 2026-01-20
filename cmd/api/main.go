@@ -142,6 +142,12 @@ func main() {
 
 			projects.RegisterProjects(protected, db)
 			workspaces.RegisterWorkspaces(protected, db, cfg)
+
+			//tracking.TrackingRoutes(r, db)
+			userRepo := &users.Repository{DB: db}
+			userService := &users.Service{Repo: userRepo}
+			userHandler := &users.Handler{Service: userService}
+
 			users.RegisterUsers(protected, db, cfg)
 			websocket.RegisterWebSockets(protected, dockerClient)
 		})

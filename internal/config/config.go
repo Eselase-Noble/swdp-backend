@@ -25,6 +25,7 @@ func Load() *Config {
 		DBUrl:      must("DATABASE_URL"),
 		JWTSecret:  must("JWT_SECRET"),
 		DockerHost: get("DOCKER_HOST", "unix:///var/run/docker.sock"),
+		Port:       get("PORT", "8283"),
 	}
 	return cfg
 }
