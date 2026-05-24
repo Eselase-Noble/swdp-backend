@@ -17,6 +17,10 @@ type Config struct {
 	ServiceName  string
 	DockerClient *client.Client
 
+	// SeedOnStart inserts dev seed users on every startup if true.
+	// Defaults to true when ENV=development.
+	SeedOnStart bool
+
 	// RuntimeType selects the workspace execution backend.
 	// "docker"      → Docker containers (default, works everywhere Docker is installed)
 	// "firecracker" → Firecracker MicroVMs (requires KVM; see internal/runtime/firecracker.go)
@@ -30,13 +34,17 @@ type Config struct {
 
 // Load reads configuration from environment variables.
 func Load() *Config {
+	env := get("ENV", "development")
 	cfg := &Config{
-		Env:         get("ENV", "development"),
+		Env:         env,
 		DBUrl:       must("DATABASE_URL"),
 		JWTSecret:   must("JWT_SECRET"),
 		DockerHost:  get("DOCKER_HOST", "unix:///var/run/docker.sock"),
 		Port:        get("PORT", "8282"),
 		ServiceName: get("SERVICE_NAME", "swdp-backend"),
+
+		// Seed by default in development; set SEED_ON_START=false to disable.
+		SeedOnStart: getBool("SEED_ON_START", env == "development"),
 
 		RuntimeType: get("RUNTIME_TYPE", "docker"),
 
@@ -61,4 +69,12 @@ func get(key, def string) string {
 		return def
 	}
 	return v
+}
+
+func getBool(key string, def bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	return v == "true" || v == "1" || v == "yes"
 }

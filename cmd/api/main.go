@@ -42,6 +42,14 @@ func main() {
 	sqlDB := database.Connect(cfg.DBUrl)
 	gormDB := database.ConnectDB(cfg)
 
+	// Run schema migrations on every startup (idempotent).
+	database.Migrate(context.Background(), sqlDB)
+
+	// Seed dev users when SEED_ON_START=true (default in development).
+	if cfg.SeedOnStart {
+		database.Seed(context.Background(), sqlDB)
+	}
+
 	// Select and initialise the workspace execution runtime.
 	rt := buildRuntime(cfg)
 
