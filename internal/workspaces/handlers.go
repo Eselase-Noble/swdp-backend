@@ -3,6 +3,7 @@ package workspaces
 import (
 	"encoding/json"
 	"net/http"
+	"web-based-dev-platform-backend/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -16,13 +17,22 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{Service: service}
 }
 
+func userIDFromCtx(r *http.Request) (uuid.UUID, error) {
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		return uuid.Nil, http.ErrNoCookie // signals unauthorized
+	}
+	// JWT "sub" claim carries the user ID; it lands in RegisteredClaims.Subject.
+	return uuid.Parse(user.Subject)
+}
+
 //
 // Create Workspace
 //
 
 // CreateWorkspace godoc
 // @Summary      Create workspace
-// @Description  Creates a workspace under a project
+// @Description  Creates a workspace under a project for the authenticated user
 // @Tags         Workspaces
 // @Produce      json
 // @Security     BearerAuth
@@ -33,14 +43,18 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	projectID, err := uuid.Parse(r.URL.Query().Get("project_id"))
 	if err != nil {
-		http.Error(w, "invalid project id", 400)
+		http.Error(w, "invalid project id", http.StatusBadRequest)
 		return
 	}
 
-	userID, _ := uuid.Parse(r.Context().Value("userId").(string))
+	userID, err := userIDFromCtx(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	if err := h.Service.CreateWorkspace(projectID, userID); err != nil {
-		http.Error(w, "failed to create workspace", 500)
+	if err := h.Service.CreateWorkspace(r.Context(), projectID, userID); err != nil {
+		http.Error(w, "failed to create workspace", http.StatusInternalServerError)
 		return
 	}
 
@@ -59,11 +73,19 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 // @Success      200
 // @Router       /workspaces/{id}/start [post]
 func (h *Handler) StartWorkspace(w http.ResponseWriter, r *http.Request) {
-	id, _ := uuid.Parse(chi.URLParam(r, "id"))
-	userID, _ := uuid.Parse(r.Context().Value("userId").(string))
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid workspace id", http.StatusBadRequest)
+		return
+	}
+	userID, err := userIDFromCtx(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	if err := h.Service.StartWorkspace(id, userID); err != nil {
-		http.Error(w, "forbidden", 403)
+	if err := h.Service.StartWorkspace(r.Context(), id, userID); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -82,11 +104,19 @@ func (h *Handler) StartWorkspace(w http.ResponseWriter, r *http.Request) {
 // @Success      200
 // @Router       /workspaces/{id}/stop [post]
 func (h *Handler) StopWorkspace(w http.ResponseWriter, r *http.Request) {
-	id, _ := uuid.Parse(chi.URLParam(r, "id"))
-	userID, _ := uuid.Parse(r.Context().Value("userId").(string))
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid workspace id", http.StatusBadRequest)
+		return
+	}
+	userID, err := userIDFromCtx(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	if err := h.Service.StopWorkspace(id, userID); err != nil {
-		http.Error(w, "forbidden", 403)
+	if err := h.Service.StopWorkspace(r.Context(), id, userID); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -105,18 +135,25 @@ func (h *Handler) StopWorkspace(w http.ResponseWriter, r *http.Request) {
 // @Success      200  {object}  map[string]string
 // @Router       /workspaces/{id}/status [get]
 func (h *Handler) WorkspaceStatus(w http.ResponseWriter, r *http.Request) {
-	id, _ := uuid.Parse(chi.URLParam(r, "id"))
-	userID, _ := uuid.Parse(r.Context().Value("userId").(string))
-
-	status, err := h.Service.GetStatus(id, userID)
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "not found", 404)
+		http.Error(w, "invalid workspace id", http.StatusBadRequest)
+		return
+	}
+	userID, err := userIDFromCtx(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": string(status),
-	})
+	status, err := h.Service.GetStatus(r.Context(), id, userID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": string(status)})
 }
 
 //
@@ -131,11 +168,19 @@ func (h *Handler) WorkspaceStatus(w http.ResponseWriter, r *http.Request) {
 // @Success      204
 // @Router       /workspaces/{id} [delete]
 func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
-	id, _ := uuid.Parse(chi.URLParam(r, "id"))
-	userID, _ := uuid.Parse(r.Context().Value("userId").(string))
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid workspace id", http.StatusBadRequest)
+		return
+	}
+	userID, err := userIDFromCtx(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	if err := h.Service.DeleteWorkspace(id, userID); err != nil {
-		http.Error(w, "forbidden", 403)
+	if err := h.Service.DeleteWorkspace(r.Context(), id, userID); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 

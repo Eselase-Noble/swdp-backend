@@ -1,63 +1,97 @@
 package workspaces
 
 import (
+	"context"
+	"web-based-dev-platform-backend/internal/runtime"
+
 	"github.com/google/uuid"
 )
 
 type Service struct {
-	Repo *Repository
+	Repo    *Repository
+	Runtime runtime.Runtime
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{Repo: repo}
+func NewService(repo *Repository, rt runtime.Runtime) *Service {
+	return &Service{Repo: repo, Runtime: rt}
 }
 
-func (s *Service) CreateWorkspace(
-	projectID, userID uuid.UUID,
-) error {
+func (s *Service) CreateWorkspace(ctx context.Context, projectID, userID uuid.UUID) error {
 	ws := &Workspace{
 		ProjectID: projectID,
 		UserID:    userID,
 		Status:    WorkspaceCreated,
 	}
-	return s.Repo.Create(ws)
+	if err := s.Repo.Create(ws); err != nil {
+		return err
+	}
+
+	return s.Runtime.Create(ctx, runtime.WorkspaceConfig{
+		ID:       ws.ID.String(),
+		Image:    "ubuntu:22.04",
+		CPUs:     1,
+		MemoryMB: 512,
+	})
 }
 
-func (s *Service) StartWorkspace(id, userID uuid.UUID) error {
+func (s *Service) StartWorkspace(ctx context.Context, id, userID uuid.UUID) error {
 	ws, err := s.Repo.FindOwned(id, userID)
 	if err != nil {
 		return err
 	}
-
 	if ws.Status == WorkspaceActive {
 		return nil
 	}
-
+	if err := s.Runtime.Start(ctx, id.String()); err != nil {
+		return err
+	}
 	return s.Repo.UpdateStatus(ws.ID, WorkspaceActive)
 }
 
-func (s *Service) StopWorkspace(id, userID uuid.UUID) error {
+func (s *Service) StopWorkspace(ctx context.Context, id, userID uuid.UUID) error {
 	_, err := s.Repo.FindOwned(id, userID)
 	if err != nil {
 		return err
 	}
-
+	if err := s.Runtime.Stop(ctx, id.String()); err != nil {
+		return err
+	}
 	return s.Repo.UpdateStatus(id, WorkspaceStopped)
 }
 
-func (s *Service) DeleteWorkspace(id, userID uuid.UUID) error {
+func (s *Service) DeleteWorkspace(ctx context.Context, id, userID uuid.UUID) error {
 	_, err := s.Repo.FindOwned(id, userID)
 	if err != nil {
 		return err
 	}
-
+	if err := s.Runtime.Delete(ctx, id.String()); err != nil {
+		return err
+	}
 	return s.Repo.Delete(id)
 }
 
-func (s *Service) GetStatus(id, userID uuid.UUID) (WorkspaceStatus, error) {
-	ws, err := s.Repo.FindOwned(id, userID)
-	if err != nil {
+func (s *Service) GetStatus(ctx context.Context, id, userID uuid.UUID) (WorkspaceStatus, error) {
+	if _, err := s.Repo.FindOwned(id, userID); err != nil {
 		return "", err
 	}
-	return ws.Status, nil
+
+	// Ask the runtime for the authoritative state, not just the DB record.
+	rtStatus, err := s.Runtime.Status(ctx, id.String())
+	if err != nil {
+		// Runtime doesn't know about it yet — fall back to DB.
+		ws, dbErr := s.Repo.FindByID(id)
+		if dbErr != nil {
+			return "", dbErr
+		}
+		return ws.Status, nil
+	}
+
+	switch rtStatus {
+	case runtime.StatusRunning:
+		return WorkspaceActive, nil
+	case runtime.StatusStopped:
+		return WorkspaceStopped, nil
+	default:
+		return WorkspaceCreated, nil
+	}
 }

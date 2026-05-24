@@ -28,6 +28,7 @@ import (
 	"web-based-dev-platform-backend/internal/config"
 	"web-based-dev-platform-backend/internal/database"
 	"web-based-dev-platform-backend/internal/router"
+	"web-based-dev-platform-backend/internal/runtime"
 
 	"github.com/docker/docker/client"
 	"github.com/joho/godotenv"
@@ -38,32 +39,49 @@ func main() {
 
 	cfg := config.Load()
 
-	// DBs
 	sqlDB := database.Connect(cfg.DBUrl)
 	gormDB := database.ConnectDB(cfg)
 
-	// Docker
-	dockerClient, err := client.NewClientWithOpts(
-		client.FromEnv,
-		client.WithAPIVersionNegotiation(),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer dockerClient.Close()
+	// Select and initialise the workspace execution runtime.
+	rt := buildRuntime(cfg)
 
-	if _, err := dockerClient.Ping(context.Background()); err != nil {
-		log.Fatal("Docker not reachable:", err)
-	}
-
-	// Router
 	r := router.New(router.Deps{
-		Config:       cfg,
-		SQLDB:        sqlDB,
-		GormDB:       gormDB,
-		DockerClient: dockerClient,
+		Config:  cfg,
+		SQLDB:   sqlDB,
+		GormDB:  gormDB,
+		Runtime: rt,
 	})
 
-	log.Println("🚀 SWDP backend running on :8282")
-	log.Fatal(http.ListenAndServe(":8282", r))
+	log.Printf("SWDP backend running on :%s  (runtime: %s)\n", cfg.Port, cfg.RuntimeType)
+	log.Fatal(http.ListenAndServe(":"+cfg.Port, r))
+}
+
+func buildRuntime(cfg *config.Config) runtime.Runtime {
+	switch cfg.RuntimeType {
+	case "firecracker":
+		log.Println("runtime: Firecracker MicroVM")
+		fc, err := runtime.NewFirecrackerRuntime(runtime.FirecrackerConfig{
+			KernelPath:   cfg.FirecrackerKernelPath,
+			RootfsBase:   cfg.FirecrackerRootfsBase,
+			WorkspaceDir: cfg.FirecrackerWorkspaceDir,
+		})
+		if err != nil {
+			log.Fatal("firecracker runtime init:", err)
+		}
+		return fc
+
+	default:
+		log.Println("runtime: Docker")
+		dockerClient, err := client.NewClientWithOpts(
+			client.FromEnv,
+			client.WithAPIVersionNegotiation(),
+		)
+		if err != nil {
+			log.Fatal("docker client:", err)
+		}
+		if _, err := dockerClient.Ping(context.Background()); err != nil {
+			log.Fatal("docker not reachable:", err)
+		}
+		return runtime.NewDockerRuntime(dockerClient)
+	}
 }

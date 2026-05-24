@@ -7,7 +7,7 @@ import (
 	"github.com/docker/docker/client"
 )
 
-// Interface for the Config Struct
+// Config holds all application configuration loaded from environment variables.
 type Config struct {
 	Env          string
 	DBUrl        string
@@ -16,9 +16,19 @@ type Config struct {
 	Port         string
 	ServiceName  string
 	DockerClient *client.Client
+
+	// RuntimeType selects the workspace execution backend.
+	// "docker"      → Docker containers (default, works everywhere Docker is installed)
+	// "firecracker" → Firecracker MicroVMs (requires KVM; see internal/runtime/firecracker.go)
+	RuntimeType string
+
+	// Firecracker-specific — only needed when RuntimeType = "firecracker"
+	FirecrackerKernelPath   string // path to uncompressed vmlinux binary
+	FirecrackerRootfsBase   string // path to the base ext4 rootfs template
+	FirecrackerWorkspaceDir string // directory for per-workspace VM files
 }
 
-// Load the configuration from the environment variable
+// Load reads configuration from environment variables.
 func Load() *Config {
 	cfg := &Config{
 		Env:         get("ENV", "development"),
@@ -27,6 +37,12 @@ func Load() *Config {
 		DockerHost:  get("DOCKER_HOST", "unix:///var/run/docker.sock"),
 		Port:        get("PORT", "8282"),
 		ServiceName: get("SERVICE_NAME", "swdp-backend"),
+
+		RuntimeType: get("RUNTIME_TYPE", "docker"),
+
+		FirecrackerKernelPath:   get("FIRECRACKER_KERNEL_PATH", "/opt/firecracker/vmlinux"),
+		FirecrackerRootfsBase:   get("FIRECRACKER_ROOTFS_BASE", "/opt/firecracker/ubuntu-22.04.ext4"),
+		FirecrackerWorkspaceDir: get("FIRECRACKER_WORKSPACE_DIR", "/var/swdp/workspaces"),
 	}
 	return cfg
 }

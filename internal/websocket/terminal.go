@@ -5,61 +5,38 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"web-based-dev-platform-backend/internal/runtime"
 
 	"github.com/coder/websocket"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 	"github.com/go-chi/chi/v5"
 )
 
-func TerminalHandler(dockerClient *client.Client) http.HandlerFunc {
+func TerminalHandler(rt runtime.Runtime) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := chi.URLParam(r, "workspaceID")
-		containerName := "ws-" + workspaceID
 
-		conn, err := websocket.Accept(w, r, nil)
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			// Restrict to your frontend origin in production, e.g. "app.swdp.io"
+			OriginPatterns: []string{"*"},
+		})
 		if err != nil {
-			log.Println("websocket accept error:", err)
+			log.Println("terminal: websocket accept:", err)
 			return
 		}
 		defer conn.Close(websocket.StatusNormalClosure, "")
 
-		ctx := context.Background()
-
-		// Create exec configuration
-		execConfig := types.ExecConfig{
-			Cmd:          []string{"/bin/sh"},
-			AttachStdin:  true,
-			AttachStdout: true,
-			AttachStderr: true,
-			Tty:          true,
-		}
-
-		// Create exec instance in the container
-		execResp, err := dockerClient.ContainerExecCreate(ctx, containerName, execConfig)
-		if err != nil {
-			log.Println("exec create error:", err)
-			conn.Close(websocket.StatusInternalError, "Failed to create exec instance")
-			return
-		}
-
-		// Attach to the exec instance
-		attachResp, err := dockerClient.ContainerExecAttach(ctx, execResp.ID, types.ExecStartCheck{
-			Detach: false,
-			Tty:    true,
-		})
-		if err != nil {
-			log.Println("exec attach error:", err)
-			conn.Close(websocket.StatusInternalError, "Failed to attach to exec")
-			return
-		}
-		defer attachResp.Close()
-
-		// Create a cancellable context for goroutine synchronization
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 
-		// WebSocket → container stdin
+		rwc, err := rt.Attach(ctx, workspaceID)
+		if err != nil {
+			log.Println("terminal: attach workspace:", err)
+			conn.Close(websocket.StatusInternalError, "failed to attach to workspace")
+			return
+		}
+		defer rwc.Close()
+
+		// WebSocket → workspace stdin
 		go func() {
 			defer cancel()
 			for {
@@ -69,20 +46,17 @@ func TerminalHandler(dockerClient *client.Client) http.HandlerFunc {
 				default:
 					_, msg, err := conn.Read(ctx)
 					if err != nil {
-						// Send EOF (Ctrl+D) to terminal when WebSocket closes
-						attachResp.Conn.Write([]byte{4})
+						rwc.Write([]byte{4}) // Ctrl+D (EOF) to the shell
 						return
 					}
-					_, err = attachResp.Conn.Write(msg)
-					if err != nil {
-						log.Println("write to container error:", err)
+					if _, err := rwc.Write(msg); err != nil {
 						return
 					}
 				}
 			}
 		}()
 
-		// container stdout/stderr → WebSocket
+		// workspace stdout/stderr → WebSocket
 		go func() {
 			defer cancel()
 			buf := make([]byte, 4096)
@@ -91,22 +65,20 @@ func TerminalHandler(dockerClient *client.Client) http.HandlerFunc {
 				case <-ctx.Done():
 					return
 				default:
-					n, err := attachResp.Reader.Read(buf)
+					n, err := rwc.Read(buf)
 					if err != nil {
 						if err != io.EOF {
-							log.Println("container read error:", err)
+							log.Println("terminal: read from workspace:", err)
 						}
 						return
 					}
-					err = conn.Write(ctx, websocket.MessageText, buf[:n])
-					if err != nil {
+					if err := conn.Write(ctx, websocket.MessageText, buf[:n]); err != nil {
 						return
 					}
 				}
 			}
 		}()
 
-		// Wait for context cancellation
 		<-ctx.Done()
 	}
 }
