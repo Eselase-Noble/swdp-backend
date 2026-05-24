@@ -7,6 +7,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// ErrNotOwned is returned when the workspace does not exist or belongs to a different user.
+var ErrNotOwned = errors.New("workspace not found or not owned by user")
+
 type Repository struct {
 	DB *gorm.DB
 }
@@ -32,7 +35,7 @@ func (r *Repository) FindOwned(id, userID uuid.UUID) (*Workspace, error) {
 	var ws Workspace
 	err := r.DB.First(&ws, "id = ? AND user_id = ? AND deleted_yn = false", id, userID).Error
 	if err != nil {
-		return nil, errors.New("workspace not owned by user")
+		return nil, ErrNotOwned
 	}
 	return &ws, nil
 }

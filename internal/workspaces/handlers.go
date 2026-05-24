@@ -2,6 +2,7 @@ package workspaces
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"web-based-dev-platform-backend/internal/middleware"
 
@@ -88,7 +89,11 @@ func (h *Handler) StartWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Service.StartWorkspace(r.Context(), id, userID); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		if errors.Is(err, ErrNotOwned) {
+			http.Error(w, "workspace not found", http.StatusForbidden)
+		} else {
+			http.Error(w, "workspace container is still provisioning — try again in a moment", http.StatusServiceUnavailable)
+		}
 		return
 	}
 
@@ -119,7 +124,11 @@ func (h *Handler) StopWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Service.StopWorkspace(r.Context(), id, userID); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		if errors.Is(err, ErrNotOwned) {
+			http.Error(w, "workspace not found", http.StatusForbidden)
+		} else {
+			http.Error(w, "failed to stop workspace", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -183,7 +192,11 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Service.DeleteWorkspace(r.Context(), id, userID); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		if errors.Is(err, ErrNotOwned) {
+			http.Error(w, "workspace not found", http.StatusForbidden)
+		} else {
+			http.Error(w, "failed to delete workspace", http.StatusInternalServerError)
+		}
 		return
 	}
 
