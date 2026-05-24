@@ -16,14 +16,14 @@ const (
 )
 
 type Workspace struct {
-	ID        uuid.UUID       `gorm:"type:uuid;primaryKey" json:"id"`
-	ProjectID uuid.UUID       `gorm:"type:uuid;not null" json:"project_id"`
-	UserID    uuid.UUID       `gorm:"type:uuid;not null" json:"user_id"`
-	Status    WorkspaceStatus `gorm:"type:varchar(20)" json:"status"`
+	ID        uuid.UUID       `gorm:"type:uuid;primaryKey"             json:"id"`
+	ProjectID uuid.UUID       `gorm:"type:uuid;not null"               json:"project_id"`
+	UserID    uuid.UUID       `gorm:"type:uuid;not null"               json:"user_id"`
+	Status    WorkspaceStatus `gorm:"type:varchar(20)"                 json:"status"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
+	DeletedYN bool `gorm:"column:deleted_yn;default:false" json:"-"`
 }
 
 func (w *Workspace) BeforeCreate(tx *gorm.DB) error {
