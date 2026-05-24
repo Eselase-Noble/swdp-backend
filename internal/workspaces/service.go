@@ -2,6 +2,7 @@ package workspaces
 
 import (
 	"context"
+	"log"
 	"web-based-dev-platform-backend/internal/runtime"
 
 	"github.com/google/uuid"
@@ -16,22 +17,31 @@ func NewService(repo *Repository, rt runtime.Runtime) *Service {
 	return &Service{Repo: repo, Runtime: rt}
 }
 
-func (s *Service) CreateWorkspace(ctx context.Context, projectID, userID uuid.UUID) error {
+func (s *Service) CreateWorkspace(ctx context.Context, projectID, userID uuid.UUID) (*Workspace, error) {
 	ws := &Workspace{
 		ProjectID: projectID,
 		UserID:    userID,
 		Status:    WorkspaceCreated,
 	}
 	if err := s.Repo.Create(ws); err != nil {
-		return err
+		return nil, err
 	}
 
-	return s.Runtime.Create(ctx, runtime.WorkspaceConfig{
-		ID:       ws.ID.String(),
-		Image:    "ubuntu:22.04",
-		CPUs:     1,
-		MemoryMB: 512,
-	})
+	// Provision the Docker container in the background so the HTTP response
+	// is not blocked by image pulls (ubuntu:22.04 is ~30 MB compressed).
+	wsID := ws.ID
+	go func() {
+		if err := s.Runtime.Create(context.Background(), runtime.WorkspaceConfig{
+			ID:       wsID.String(),
+			Image:    "swdp-workspace:latest",
+			CPUs:     1,
+			MemoryMB: 512,
+		}); err != nil {
+			log.Printf("workspace runtime.Create %s: %v", wsID, err)
+		}
+	}()
+
+	return ws, nil
 }
 
 func (s *Service) StartWorkspace(ctx context.Context, id, userID uuid.UUID) error {

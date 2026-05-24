@@ -53,12 +53,15 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Service.CreateWorkspace(r.Context(), projectID, userID); err != nil {
+	ws, err := h.Service.CreateWorkspace(r.Context(), projectID, userID)
+	if err != nil {
 		http.Error(w, "failed to create workspace", http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(ws)
 }
 
 //

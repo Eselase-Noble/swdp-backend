@@ -7,13 +7,13 @@ import (
 )
 
 type ProjectMember struct {
-	UserID    uuid.UUID `gorm:"type:uuid;primaryKey"`
-	ProjectID uuid.UUID `gorm:"type:uuid;primaryKey"`
-	Role      string    `gorm:"not null"`
+	UserID    uuid.UUID `gorm:"type:uuid;primaryKey"             json:"user_id"`
+	ProjectID uuid.UUID `gorm:"type:uuid;primaryKey"             json:"project_id"`
+	Role      string    `gorm:"not null"                         json:"role"`
 
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedYN bool `gorm:"default:false"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	DeletedYN bool      `gorm:"column:deleted_yn;default:false"  json:"-"`
 }
 
 func (ProjectMember) TableName() string {

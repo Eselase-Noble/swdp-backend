@@ -74,8 +74,12 @@ func New(d Deps) http.Handler {
 			workSpaceHandler := workspaces.NewHandler(workSpaceService)
 			workspaces.Routes(protected, workSpaceHandler)
 
-			// WebSockets — terminal and logs go through the same runtime interface
-			websocket.RegisterWebSockets(protected, d.Runtime)
+		})
+
+		// WebSocket routes use ?token= auth — browsers can't send headers during WS upgrade
+		api.Group(func(wsGroup chi.Router) {
+			wsGroup.Use(middleware.JWTAuthWS(d.Config.JWTSecret))
+			websocket.RegisterWebSockets(wsGroup, d.Runtime)
 		})
 	})
 
