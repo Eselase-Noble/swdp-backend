@@ -2,21 +2,19 @@ package projects
 
 import (
 	"time"
-	"web-based-dev-platform-backend/internal/users"
 
 	"github.com/google/uuid"
 )
 
 type Project struct {
-	ID          uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	Name        string    `gorm:"not null" json:"name"`
-	OwnerID     uuid.UUID `gorm:"type:uuid;not null" json:"owner_id"`
-	Version     int       `json:"version"`
-	Environment string    `gorm:"type:environment_enum;default:'dev'" json:"environment"`
-
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedYN users.DeleteYn `gorm:"default:N"`
+	ID          uuid.UUID `gorm:"type:uuid;column:project_id;default:gen_random_uuid();primaryKey" json:"id"`
+	Name        string    `gorm:"column:project_name;not null"                                     json:"name"`
+	OwnerID     uuid.UUID `gorm:"type:uuid;column:owner_id;not null"                               json:"owner_id"`
+	Version     int       `gorm:"column:version"                                                   json:"version"`
+	Environment string    `gorm:"type:environment_enum;column:environment;default:'dev'"           json:"environment"`
+	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime"                                 json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime"                                 json:"updated_at"`
+	DeletedYN   bool      `gorm:"column:deleted_yn;default:false"                                  json:"-"`
 }
 
 func (Project) TableName() string {

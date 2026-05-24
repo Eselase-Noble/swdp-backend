@@ -134,7 +134,7 @@ func (f *firecrackerRuntime) Start(ctx context.Context, id string) error {
 		MachineCfg: models.MachineConfiguration{
 			VcpuCount:  pI64(meta.CPUs),
 			MemSizeMib: pI64(meta.MemoryMB),
-			HtEnabled:  pBool(false),
+			Smt:        pBool(false),
 		},
 		// vsock device: host-side socket = dir/vsock.sock
 		// Inside the VM, socat listens on vsock port 9999 and forks a shell.

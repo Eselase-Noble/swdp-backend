@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Handler struct {
@@ -15,38 +16,65 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{Service: service}
 }
 
+// createUserRequest is the expected JSON body for user creation.
+type createUserRequest struct {
+	Username string `json:"username"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
+}
+
 //
 // Create User
 //
 
 // CreateUser godoc
 // @Summary      Create user
-// @Description  Creates a new user
+// @Description  Creates a new user (admin only)
 // @Tags         User
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        user  body      User  true  "User"
+// @Param        body  body      createUserRequest  true  "User payload"
 // @Success      201   {object}  User
 // @Failure      400   {object}  map[string]string
 // @Failure      500   {object}  map[string]string
 // @Router       /users/add [post]
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
-	var user User
-
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+	var req createUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
 		return
 	}
 
-	if err := h.Service.AddUser(&user); err != nil {
+	if req.Email == "" || req.Password == "" || req.Username == "" {
+		http.Error(w, `{"error":"username, email and password are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, `{"error":"failed to hash password"}`, http.StatusInternalServerError)
+		return
+	}
+
+	user := &User{
+		Username:     req.Username,
+		Name:         req.Name,
+		Email:        req.Email,
+		PasswordHash: string(hash),
+		Role:         req.Role,
+	}
+
+	if err := h.Service.AddUser(user); err != nil {
 		http.Error(w, `{"error":"failed to create user"}`, http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(user)
 }
 
 //
@@ -73,7 +101,7 @@ func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(user)
 }
 
 //
@@ -96,7 +124,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(users)
+	json.NewEncoder(w).Encode(users)
 }
 
 //
@@ -124,6 +152,10 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Never allow password_hash to be set via this endpoint directly.
+	delete(updates, "password_hash")
+	delete(updates, "password")
+
 	if err := h.Service.UpdateUser(id, updates); err != nil {
 		http.Error(w, `{"error":"failed to update user"}`, http.StatusInternalServerError)
 		return
@@ -143,7 +175,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 // @Security     BearerAuth
 // @Param        id   path      string  true  "User ID"
 // @Success      204
-// @Failure      400  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
 // @Router       /users/delete/{id} [delete]
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")

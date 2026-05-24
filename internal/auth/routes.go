@@ -11,69 +11,119 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// loginRequest represents the JSON body for login
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// RegisterAuth registers login and logout routes
+type registerRequest struct {
+	Username string `json:"username"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
+}
+
+// RegisterAuth registers public auth routes (no JWT required).
 func RegisterAuth(r chi.Router, db *pgxpool.Pool, cfg *config.Config) {
 	r.Post("/auth/login", login(db, cfg))
+	r.Post("/auth/register", register(db))
 	r.Post("/auth/logout", logout())
 }
 
-// login handles user authentication
+// login authenticates a user and sets a JWT cookie.
 func login(db *pgxpool.Pool, cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		defer func(Body io.ReadCloser) {
-			err := Body.Close()
-			if err != nil {
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			}
-		}(r.Body)
+		defer r.Body.Close()
 
 		var req loginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request", http.StatusBadRequest)
+			http.Error(w, "invalid request", http.StatusBadRequest)
 			return
 		}
 
-		var userId, role, passwordHash string
-
+		var userID, role, passwordHash string
 		err := db.QueryRow(
 			r.Context(),
-			"SELECT userId, role, password FROM users WHERE email = $1",
+			// Column names match migrations/001_init.sql exactly.
+			"SELECT user_id, role, password_hash FROM users WHERE email = $1 AND deleted_yn = false",
 			req.Email,
-		).Scan(&userId, &role, &passwordHash)
+		).Scan(&userID, &role, &passwordHash)
 
-		// Always return same error message for wrong email or password
 		if err != nil || !CheckPassword(req.Password, passwordHash) {
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			http.Error(w, "invalid credentials", http.StatusUnauthorized)
 			return
 		}
 
-		token, err := Generate(userId, role, cfg.JWTSecret)
+		token, err := Generate(userID, role, cfg.JWTSecret)
 		if err != nil {
-			http.Error(w, "Token generation error", http.StatusInternalServerError)
+			http.Error(w, "token generation error", http.StatusInternalServerError)
 			return
 		}
 
-		// Set the JWT token as a secure, HttpOnly cookie
 		http.SetCookie(w, &http.Cookie{
 			Name:     "token",
 			Value:    token,
 			HttpOnly: true,
-			Secure:   true, // true in production
+			Secure:   true,
 			Path:     "/",
 			SameSite: http.SameSiteStrictMode,
 		})
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"token": token})
 	}
 }
 
-// logout clears the authentication cookie
+// register creates a new developer account.
+func register(db *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func(body io.ReadCloser) { body.Close() }(r.Body)
+
+		var req registerRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+
+		if req.Email == "" || req.Password == "" || req.Username == "" || req.Name == "" {
+			http.Error(w, "username, name, email and password are required", http.StatusBadRequest)
+			return
+		}
+
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		role := req.Role
+		if role == "" {
+			role = "developer"
+		}
+
+		var userID string
+		err = db.QueryRow(
+			r.Context(),
+			`INSERT INTO users (username, name, email, password_hash, role)
+			 VALUES ($1, $2, $3, $4, $5)
+			 RETURNING user_id`,
+			req.Username, req.Name, req.Email, string(hash), role,
+		).Scan(&userID)
+
+		if err != nil {
+			http.Error(w, "registration failed — email or username may already be taken", http.StatusConflict)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{"user_id": userID})
+	}
+}
+
+// logout clears the auth cookie.
 func logout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{
@@ -82,24 +132,20 @@ func logout() http.HandlerFunc {
 			Path:     "/",
 			MaxAge:   -1,
 			HttpOnly: true,
-			Secure:   true, // match login cookie
+			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
 		})
 		w.WriteHeader(http.StatusOK)
 	}
 }
 
-// CheckPassword verifies a plaintext password against a bcrypt hash
+// CheckPassword verifies a plaintext password against a bcrypt hash.
 func CheckPassword(password, passwordHash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password))
-	return err == nil
+	return bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)) == nil
 }
 
-// HashPassword generates a bcrypt hash from a plaintext password
+// HashPassword generates a bcrypt hash from a plaintext password.
 func HashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hash), nil
+	return string(hash), err
 }
