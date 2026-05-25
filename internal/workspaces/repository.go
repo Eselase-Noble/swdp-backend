@@ -51,3 +51,11 @@ func (r *Repository) Delete(id uuid.UUID) error {
 		Where("id = ?", id).
 		Update("deleted_yn", true).Error
 }
+
+func (r *Repository) ListByProject(projectID, userID uuid.UUID) ([]Workspace, error) {
+	var ws []Workspace
+	err := r.DB.Where("project_id = ? AND user_id = ? AND deleted_yn = false", projectID, userID).
+		Order("created_at DESC").
+		Find(&ws).Error
+	return ws, err
+}

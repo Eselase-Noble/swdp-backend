@@ -48,3 +48,32 @@ type Runtime interface {
 	// Logs returns a streaming reader of workspace output (drives the WebSocket log viewer).
 	Logs(ctx context.Context, id string) (io.ReadCloser, error)
 }
+
+// FileEntry represents a single filesystem entry inside a workspace volume.
+type FileEntry struct {
+	Name string `json:"name"` // base name, e.g. "main.py"
+	Path string `json:"path"` // slash-separated path relative to /workspace, e.g. "src/main.py"
+	Type string `json:"type"` // "file" | "dir"
+}
+
+// FileRuntime is an optional capability extension for runtimes that expose a
+// filesystem API over the workspace volume. DockerRuntime implements it;
+// FirecrackerRuntime does not (yet).
+type FileRuntime interface {
+	// ListFiles returns all non-hidden entries under /workspace (flat, max depth 6).
+	// Returns an empty slice (not an error) if the workspace is stopped.
+	ListFiles(ctx context.Context, id string) ([]FileEntry, error)
+
+	// ReadFile returns the raw bytes of the file at relPath under /workspace.
+	ReadFile(ctx context.Context, id, relPath string) ([]byte, error)
+
+	// WriteFile creates or overwrites the file at relPath under /workspace.
+	// Intermediate directories are created automatically.
+	WriteFile(ctx context.Context, id, relPath string, content []byte) error
+
+	// DeletePath removes the file or directory tree at relPath under /workspace.
+	DeletePath(ctx context.Context, id, relPath string) error
+
+	// CreateDir creates a directory (and all parents) at relPath under /workspace.
+	CreateDir(ctx context.Context, id, relPath string) error
+}

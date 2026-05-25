@@ -3,8 +3,11 @@ package workspaces
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"net/url"
 	"web-based-dev-platform-backend/internal/middleware"
+	"web-based-dev-platform-backend/internal/runtime"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -21,10 +24,47 @@ func NewHandler(service *Service) *Handler {
 func userIDFromCtx(r *http.Request) (uuid.UUID, error) {
 	user := middleware.GetUser(r.Context())
 	if user == nil {
-		return uuid.Nil, http.ErrNoCookie // signals unauthorized
+		return uuid.Nil, http.ErrNoCookie
 	}
-	// JWT "sub" claim carries the user ID; it lands in RegisteredClaims.Subject.
 	return uuid.Parse(user.Subject)
+}
+
+// fileRuntime returns the FileRuntime if the backing runtime supports it.
+func (h *Handler) fileRuntime() (runtime.FileRuntime, bool) {
+	fr, ok := h.Service.Runtime.(runtime.FileRuntime)
+	return fr, ok
+}
+
+//
+// List Workspaces
+//
+
+func (h *Handler) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
+	projectID, err := uuid.Parse(r.URL.Query().Get("project_id"))
+	if err != nil {
+		http.Error(w, "invalid project_id", http.StatusBadRequest)
+		return
+	}
+
+	userID, err := userIDFromCtx(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	wsList, err := h.Service.ListWorkspaces(r.Context(), projectID, userID)
+	if err != nil {
+		http.Error(w, "failed to list workspaces", http.StatusInternalServerError)
+		return
+	}
+
+	// Return [] not null when empty
+	if wsList == nil {
+		wsList = []Workspace{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(wsList)
 }
 
 //
@@ -197,6 +237,209 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 		} else {
 			http.Error(w, "failed to delete workspace", http.StatusInternalServerError)
 		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ─── File API helpers ─────────────────────────────────────────────────────────
+
+// workspaceIDAndOwner parses and validates the workspace ID and ownership.
+func (h *Handler) workspaceIDAndOwner(r *http.Request) (uuid.UUID, uuid.UUID, error) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		return uuid.Nil, uuid.Nil, errors.New("invalid workspace id")
+	}
+	userID, err := userIDFromCtx(r)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, errors.New("unauthorized")
+	}
+	if _, err := h.Service.Repo.FindOwned(id, userID); err != nil {
+		return uuid.Nil, uuid.Nil, ErrNotOwned
+	}
+	return id, userID, nil
+}
+
+// filePath extracts and URL-decodes the wildcard filepath parameter.
+func filePath(r *http.Request) string {
+	p, _ := url.PathUnescape(chi.URLParam(r, "*"))
+	return p
+}
+
+// ─── File Handlers ────────────────────────────────────────────────────────────
+
+// ListFiles godoc
+// @Summary      List workspace files
+// @Tags         Workspaces
+// @Security     BearerAuth
+// @Param        id  path  string  true  "Workspace ID"
+// @Success      200  {array}  runtime.FileEntry
+// @Router       /workspaces/{id}/files [get]
+func (h *Handler) ListFiles(w http.ResponseWriter, r *http.Request) {
+	id, _, err := h.workspaceIDAndOwner(r)
+	if err != nil {
+		if errors.Is(err, ErrNotOwned) {
+			http.Error(w, "workspace not found", http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+
+	fr, ok := h.fileRuntime()
+	if !ok {
+		http.Error(w, "file operations not supported by this runtime", http.StatusNotImplemented)
+		return
+	}
+
+	entries, err := fr.ListFiles(r.Context(), id.String())
+	if err != nil {
+		http.Error(w, "failed to list files", http.StatusInternalServerError)
+		return
+	}
+	if entries == nil {
+		entries = []runtime.FileEntry{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(entries)
+}
+
+// ReadFile godoc
+// @Summary      Read a workspace file
+// @Tags         Workspaces
+// @Security     BearerAuth
+// @Param        id        path  string  true  "Workspace ID"
+// @Param        filepath  path  string  true  "File path relative to /workspace"
+// @Success      200
+// @Router       /workspaces/{id}/files/{filepath} [get]
+func (h *Handler) ReadFile(w http.ResponseWriter, r *http.Request) {
+	id, _, err := h.workspaceIDAndOwner(r)
+	if err != nil {
+		if errors.Is(err, ErrNotOwned) {
+			http.Error(w, "workspace not found", http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+
+	fr, ok := h.fileRuntime()
+	if !ok {
+		http.Error(w, "file operations not supported by this runtime", http.StatusNotImplemented)
+		return
+	}
+
+	content, err := fr.ReadFile(r.Context(), id.String(), filePath(r))
+	if err != nil {
+		http.Error(w, "file not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Write(content)
+}
+
+// WriteFile godoc
+// @Summary      Create or overwrite a workspace file
+// @Tags         Workspaces
+// @Security     BearerAuth
+// @Param        id        path  string  true  "Workspace ID"
+// @Param        filepath  path  string  true  "File path relative to /workspace"
+// @Success      204
+// @Router       /workspaces/{id}/files/{filepath} [put]
+func (h *Handler) WriteFile(w http.ResponseWriter, r *http.Request) {
+	id, _, err := h.workspaceIDAndOwner(r)
+	if err != nil {
+		if errors.Is(err, ErrNotOwned) {
+			http.Error(w, "workspace not found", http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+
+	fr, ok := h.fileRuntime()
+	if !ok {
+		http.Error(w, "file operations not supported by this runtime", http.StatusNotImplemented)
+		return
+	}
+
+	content, err := io.ReadAll(io.LimitReader(r.Body, 10<<20)) // 10 MB cap
+	if err != nil {
+		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := fr.WriteFile(r.Context(), id.String(), filePath(r), content); err != nil {
+		http.Error(w, "failed to write file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeleteFile godoc
+// @Summary      Delete a workspace file or directory
+// @Tags         Workspaces
+// @Security     BearerAuth
+// @Param        id        path  string  true  "Workspace ID"
+// @Param        filepath  path  string  true  "File path relative to /workspace"
+// @Success      204
+// @Router       /workspaces/{id}/files/{filepath} [delete]
+func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
+	id, _, err := h.workspaceIDAndOwner(r)
+	if err != nil {
+		if errors.Is(err, ErrNotOwned) {
+			http.Error(w, "workspace not found", http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+
+	fr, ok := h.fileRuntime()
+	if !ok {
+		http.Error(w, "file operations not supported by this runtime", http.StatusNotImplemented)
+		return
+	}
+
+	if err := fr.DeletePath(r.Context(), id.String(), filePath(r)); err != nil {
+		http.Error(w, "failed to delete: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// CreateDir godoc
+// @Summary      Create a directory in the workspace
+// @Tags         Workspaces
+// @Security     BearerAuth
+// @Param        id        path  string  true  "Workspace ID"
+// @Param        filepath  path  string  true  "Directory path relative to /workspace"
+// @Success      204
+// @Router       /workspaces/{id}/dirs/{filepath} [post]
+func (h *Handler) CreateDir(w http.ResponseWriter, r *http.Request) {
+	id, _, err := h.workspaceIDAndOwner(r)
+	if err != nil {
+		if errors.Is(err, ErrNotOwned) {
+			http.Error(w, "workspace not found", http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+
+	fr, ok := h.fileRuntime()
+	if !ok {
+		http.Error(w, "file operations not supported by this runtime", http.StatusNotImplemented)
+		return
+	}
+
+	if err := fr.CreateDir(r.Context(), id.String(), filePath(r)); err != nil {
+		http.Error(w, "failed to create directory: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 

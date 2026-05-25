@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"path/filepath"
+	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
+	"github.com/docker/docker/pkg/stdcopy"
 )
 
 const workspaceImageTag = "swdp-workspace:latest"
@@ -218,3 +221,142 @@ type dockerConn struct{ resp types.HijackedResponse }
 func (c *dockerConn) Read(p []byte) (int, error)  { return c.resp.Reader.Read(p) }
 func (c *dockerConn) Write(p []byte) (int, error) { return c.resp.Conn.Write(p) }
 func (c *dockerConn) Close() error                { c.resp.Close(); return nil }
+
+// ─── FileRuntime implementation ────────────────────────────────────────────────
+
+// ListFiles returns all non-hidden entries under /workspace (flat list, max depth 6).
+// Returns an empty slice if the container is stopped or not yet created.
+func (d *DockerRuntime) ListFiles(ctx context.Context, id string) ([]FileEntry, error) {
+	out, err := d.execCmd(ctx, id, `find /workspace -maxdepth 6 -not -name '.*' -printf '%y\t%P\n' 2>/dev/null`)
+	if err != nil {
+		return []FileEntry{}, nil // container likely stopped — return empty, not an error
+	}
+
+	var entries []FileEntry
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 2)
+		if len(parts) != 2 || parts[1] == "" {
+			continue // skip the root dir itself (empty relative path)
+		}
+		ftype := "file"
+		if parts[0] == "d" {
+			ftype = "dir"
+		}
+		entries = append(entries, FileEntry{
+			Name: filepath.Base(parts[1]),
+			Path: parts[1],
+			Type: ftype,
+		})
+	}
+	return entries, nil
+}
+
+// ReadFile returns the raw content of a file inside the workspace volume.
+// Works on both running and stopped containers via Docker's copy API.
+func (d *DockerRuntime) ReadFile(ctx context.Context, id, relPath string) ([]byte, error) {
+	relPath = strings.TrimLeft(relPath, "/")
+	reader, _, err := d.client.CopyFromContainer(ctx, containerName(id), "/workspace/"+relPath)
+	if err != nil {
+		return nil, fmt.Errorf("read file: %w", err)
+	}
+	defer reader.Close()
+
+	tr := tar.NewReader(reader)
+	if _, err := tr.Next(); err != nil {
+		return nil, fmt.Errorf("read file tar: %w", err)
+	}
+	return io.ReadAll(tr)
+}
+
+// WriteFile creates or overwrites a file inside the workspace volume.
+// Intermediate directories are created automatically by Docker's tar extraction.
+// Works on both running and stopped containers.
+func (d *DockerRuntime) WriteFile(ctx context.Context, id, relPath string, content []byte) error {
+	relPath = strings.TrimLeft(relPath, "/")
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	if err := tw.WriteHeader(&tar.Header{
+		Name:     relPath,
+		Mode:     0644,
+		Size:     int64(len(content)),
+		Typeflag: tar.TypeReg,
+	}); err != nil {
+		return fmt.Errorf("write file tar header: %w", err)
+	}
+	if _, err := tw.Write(content); err != nil {
+		return fmt.Errorf("write file tar body: %w", err)
+	}
+	if err := tw.Close(); err != nil {
+		return fmt.Errorf("write file tar close: %w", err)
+	}
+
+	return d.client.CopyToContainer(ctx, containerName(id), "/workspace", &buf, types.CopyToContainerOptions{})
+}
+
+// DeletePath removes a file or directory tree at relPath inside /workspace.
+// Requires the container to be running.
+func (d *DockerRuntime) DeletePath(ctx context.Context, id, relPath string) error {
+	safe, err := sanitiseRelPath(relPath)
+	if err != nil {
+		return err
+	}
+	_, execErr := d.execCmd(ctx, id, "rm -rf "+shellQuote("/workspace/"+safe))
+	return execErr
+}
+
+// CreateDir creates a directory (and all parents) at relPath inside /workspace.
+// Requires the container to be running.
+func (d *DockerRuntime) CreateDir(ctx context.Context, id, relPath string) error {
+	safe, err := sanitiseRelPath(relPath)
+	if err != nil {
+		return err
+	}
+	_, execErr := d.execCmd(ctx, id, "mkdir -p "+shellQuote("/workspace/"+safe))
+	return execErr
+}
+
+// execCmd runs a bash command inside the workspace container (non-TTY) and
+// returns stdout. Uses stdcopy to demux the multiplexed Docker exec stream.
+func (d *DockerRuntime) execCmd(ctx context.Context, id, cmd string) ([]byte, error) {
+	execID, err := d.client.ContainerExecCreate(ctx, containerName(id), types.ExecConfig{
+		Cmd:          []string{"/bin/bash", "-c", cmd},
+		AttachStdout: true,
+		AttachStderr: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("exec create: %w", err)
+	}
+
+	resp, err := d.client.ContainerExecAttach(ctx, execID.ID, types.ExecStartCheck{})
+	if err != nil {
+		return nil, fmt.Errorf("exec attach: %w", err)
+	}
+	defer resp.Close()
+
+	var stdout bytes.Buffer
+	if _, err = stdcopy.StdCopy(&stdout, io.Discard, resp.Reader); err != nil {
+		return nil, fmt.Errorf("exec output: %w", err)
+	}
+	return stdout.Bytes(), nil
+}
+
+// sanitiseRelPath cleans and validates a workspace-relative path, rejecting
+// traversal attempts (e.g. "../etc/passwd").
+func sanitiseRelPath(path string) (string, error) {
+	path = strings.TrimPrefix(path, "/workspace/")
+	path = strings.TrimLeft(path, "/")
+	clean := filepath.Clean(path)
+	if clean == "" || clean == "." || strings.HasPrefix(clean, "..") {
+		return "", fmt.Errorf("unsafe workspace path: %q", path)
+	}
+	return clean, nil
+}
+
+// shellQuote wraps s in single quotes, escaping any embedded single quotes.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}

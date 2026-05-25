@@ -17,6 +17,10 @@ func NewService(repo *Repository, rt runtime.Runtime) *Service {
 	return &Service{Repo: repo, Runtime: rt}
 }
 
+func (s *Service) ListWorkspaces(ctx context.Context, projectID, userID uuid.UUID) ([]Workspace, error) {
+	return s.Repo.ListByProject(projectID, userID)
+}
+
 func (s *Service) CreateWorkspace(ctx context.Context, projectID, userID uuid.UUID) (*Workspace, error) {
 	ws := &Workspace{
 		ProjectID: projectID,
