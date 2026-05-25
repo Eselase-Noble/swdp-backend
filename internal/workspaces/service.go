@@ -53,9 +53,9 @@ func (s *Service) StartWorkspace(ctx context.Context, id, userID uuid.UUID) erro
 	if err != nil {
 		return err
 	}
-	if ws.Status == WorkspaceActive {
-		return nil
-	}
+	// Always attempt the Docker start — don't trust DB status alone.
+	// ContainerStart is idempotent: if the container is already running the
+	// runtime returns a "not modified" error which we treat as success.
 	if err := s.Runtime.Start(ctx, id.String()); err != nil {
 		return err
 	}
@@ -85,27 +85,35 @@ func (s *Service) DeleteWorkspace(ctx context.Context, id, userID uuid.UUID) err
 }
 
 func (s *Service) GetStatus(ctx context.Context, id, userID uuid.UUID) (WorkspaceStatus, error) {
-	if _, err := s.Repo.FindOwned(id, userID); err != nil {
+	ws, err := s.Repo.FindOwned(id, userID)
+	if err != nil {
 		return "", err
 	}
 
 	// Ask the runtime for the authoritative state, not just the DB record.
 	rtStatus, err := s.Runtime.Status(ctx, id.String())
 	if err != nil {
-		// Runtime doesn't know about it yet — fall back to DB.
-		ws, dbErr := s.Repo.FindByID(id)
-		if dbErr != nil {
-			return "", dbErr
-		}
+		// Runtime doesn't know about it (container not yet created, daemon
+		// restart, etc.) — return the DB record as the best available answer.
 		return ws.Status, nil
 	}
 
+	var actual WorkspaceStatus
 	switch rtStatus {
 	case runtime.StatusRunning:
-		return WorkspaceActive, nil
+		actual = WorkspaceActive
 	case runtime.StatusStopped:
-		return WorkspaceStopped, nil
+		actual = WorkspaceStopped
 	default:
-		return WorkspaceCreated, nil
+		actual = WorkspaceCreated
 	}
+
+	// Keep the DB in sync with the real container state.  If the Docker daemon
+	// was restarted (or the container exited on its own) the DB might still say
+	// "active" — this corrects that so the next StartWorkspace call works.
+	if actual != ws.Status {
+		_ = s.Repo.UpdateStatus(id, actual)
+	}
+
+	return actual, nil
 }

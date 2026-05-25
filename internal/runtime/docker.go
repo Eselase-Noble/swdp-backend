@@ -151,7 +151,12 @@ func (d *DockerRuntime) Create(ctx context.Context, cfg WorkspaceConfig) error {
 }
 
 func (d *DockerRuntime) Start(ctx context.Context, id string) error {
-	return d.client.ContainerStart(ctx, containerName(id), types.ContainerStartOptions{})
+	err := d.client.ContainerStart(ctx, containerName(id), types.ContainerStartOptions{})
+	// "not modified" means the container is already running — treat as success.
+	if err != nil && !errdefs.IsNotModified(err) {
+		return err
+	}
+	return nil
 }
 
 func (d *DockerRuntime) Stop(ctx context.Context, id string) error {
