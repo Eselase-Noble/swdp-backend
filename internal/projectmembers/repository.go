@@ -1,6 +1,7 @@
 package projectmembers
 
 import (
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -18,4 +19,12 @@ func NewRepository(db *gorm.DB) *Repository {
 
 func (r *Repository) Add(member *ProjectMember) error {
 	return r.DB.Create(member).Error
+}
+
+func (r *Repository) Exists(projectID, userID uuid.UUID) (bool, error) {
+	var count int64
+	err := r.DB.Model(&ProjectMember{}).
+		Where("project_id = ? AND user_id = ? AND deleted_yn = false", projectID, userID).
+		Count(&count).Error
+	return count > 0, err
 }

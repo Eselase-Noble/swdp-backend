@@ -2,6 +2,7 @@ package projectmembers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -51,6 +52,10 @@ func (h *Handler) AddProjectMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Service.AddMember(projectID, req.UserID, req.Role); err != nil {
+		if errors.Is(err, ErrAlreadyMember) {
+			http.Error(w, `{"error":"user is already a member of this project"}`, http.StatusConflict)
+			return
+		}
 		http.Error(w, `{"error":"failed to add project member"}`, http.StatusInternalServerError)
 		return
 	}

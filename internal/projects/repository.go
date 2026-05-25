@@ -27,7 +27,10 @@ func (r *Repository) Create(ctx context.Context, project *Project) error {
 func (r *Repository) FindByUser(ctx context.Context, userID uuid.UUID) ([]Project, error) {
 	var projects []Project
 	err := r.DB.WithContext(ctx).
-		Where("owner_id = ? AND deleted_yn = false", userID).
+		Where(
+			"deleted_yn = false AND (owner_id = ? OR project_id IN (SELECT project_id FROM project_members WHERE user_id = ? AND deleted_yn = false))",
+			userID, userID,
+		).
 		Find(&projects).Error
 	return projects, err
 }
