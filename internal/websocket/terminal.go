@@ -72,7 +72,7 @@ func TerminalHandler(rt runtime.Runtime) http.HandlerFunc {
 						}
 						return
 					}
-					if err := conn.Write(ctx, websocket.MessageText, buf[:n]); err != nil {
+					if err := conn.Write(ctx, websocket.MessageBinary, buf[:n]); err != nil {
 						return
 					}
 				}
